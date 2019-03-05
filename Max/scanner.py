@@ -46,15 +46,15 @@ TokenType = enum.Enum("TokenType", """
 """) # Note no OP_UMINUS.
 
 class Token:
-    def __init__(self, type, string, file_offset, line, column):
+    def __init__(self, type, string, begin, end, line, column):
         self.type = type
         self.string = string
-        self.file_offset = file_offset
+        self.begin = begin
         self.line = line
         self.column = column
     
     def __str__(self):
-        return f'{self.line}:{self.column} ({self.file_offset}) {self.type} "{self.string}"'
+        return f'{self.line}:{self.column} ({self.begin}-{self.end}) {self.type} "{self.string}"'
 
 class Scanner:
     def __init__(self, source):
@@ -83,7 +83,7 @@ class Scanner:
             self._advance_b(1)
     
     def _scan_comment(self):
-        match = re.match("\*\*\*.*", self._s[self._b:]) # Note: the .* will not match newlines.
+        match = re.match("\*\*\*.*", self._s[self._b:]) # Note the . will not match newlines.
         if match:
             return TokenType.COMMENT, match[0], len(match[0])
         else:
@@ -159,7 +159,7 @@ class Scanner:
     def next(self):
         while True:
             if self._b >= len(self._s):
-                return Token(TokenType.EOF, "", self._b, self._line, self._column)
+                return Token(TokenType.EOF, "", self._b, self._b, self._line, self._column)
             
             self._skip_whitespace()
             
@@ -174,12 +174,17 @@ class Scanner:
                 scan_result = scan_task()
                 if not scan_result: continue
                 token_type, token_string, advancement = scan_result
-                token = Token(token_type, token_string, self._b, self._line, self._column)
+                token = Token(token_type, token_string, self._b, self._b+advancement, self._line, self._column)
                 self._advance_b(advancement)
                 return token
             
             self._warn(f"Unrecognized character {self._s[self._b]}.")
             self._advance_b(1)
+    
+    def peek(self):
+        b, line, column = self._b, self._line, self._column
+        return self.next()
+        self._b, self._line, self._column = b, line, column
     
     def __iter__(self):
         return self
@@ -191,7 +196,6 @@ class Scanner:
         else:
             return n
 
-# To do: peek
 # To do: file opening
 # To do: error combination
 # To do: test suites
