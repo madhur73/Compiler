@@ -164,10 +164,10 @@ class Scanner:
     
     def next(self):
         while True:
+            self._skip_whitespace()
+            
             if self._b >= len(self._s):
                 return Token(TokenType.EOF, "", self._b, self._b, self._line, self._column)
-            
-            self._skip_whitespace()
             
             scan_tasks = [
                 self._scan_comment,
