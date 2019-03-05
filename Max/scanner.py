@@ -50,6 +50,7 @@ class Token:
         self.type = type
         self.string = string
         self.begin = begin
+        self.end = end
         self.line = line
         self.column = column
     
@@ -57,8 +58,13 @@ class Token:
         return f'{self.line}:{self.column} ({self.begin}-{self.end}) {self.type} "{self.string}"'
 
 class Scanner:
-    def __init__(self, source):
-        self._s = source
+    def __init__(self, *, string="", filepath=None, emit_comments=True):
+        if filepath:
+            with open(filepath) as file:
+                string = file.read()
+        
+        self._s = string
+        self._emit_comments = emit_comments
         
         # File offset to beginning of next token.
         self._b = 0
@@ -83,7 +89,7 @@ class Scanner:
             self._advance_b(1)
     
     def _scan_comment(self):
-        match = re.match("\*\*\*.*", self._s[self._b:]) # Note the . will not match newlines.
+        match = re.match(r"\*\*\*.*", self._s[self._b:]) # Note the . will not match newlines.
         if match:
             return TokenType.COMMENT, match[0], len(match[0])
         else:
@@ -174,6 +180,8 @@ class Scanner:
                 scan_result = scan_task()
                 if not scan_result: continue
                 token_type, token_string, advancement = scan_result
+                if (not self._emit_comments) and (token_type == TokenType.COMMENT):
+                    continue
                 token = Token(token_type, token_string, self._b, self._b+advancement, self._line, self._column)
                 self._advance_b(advancement)
                 return token
@@ -183,8 +191,9 @@ class Scanner:
     
     def peek(self):
         b, line, column = self._b, self._line, self._column
-        return self.next()
+        next = self.next()
         self._b, self._line, self._column = b, line, column
+        return next
     
     def __iter__(self):
         return self
