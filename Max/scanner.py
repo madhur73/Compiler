@@ -49,7 +49,7 @@ _keywords = {
     "if":      TokenType.KW_IF,
     "in":      TokenType.KW_IN,
     "local":   TokenType.KW_LOCAL,
-    "print":   TokenType.PRINT
+    "print":   TokenType.PRINT,
     "return":  TokenType.RETURN,
     "then":    TokenType.KW_THEN,
     "tuple":   TokenType.KW_TUPLE,
@@ -87,7 +87,7 @@ class Scanner:
         if filepath:
             with open(filepath) as file:
                 string = file.read()
-        else if file:
+        elif file:
             string = file.read()
         
         self._s = string
