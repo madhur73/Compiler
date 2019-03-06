@@ -6,6 +6,8 @@ test_files = [
 	"tests/test3_outline.txt",
 	"tests/test4_token_in_garbage.txt",
 	"tests/test5_id_or_keyword.txt",
+	"tests/test6_comments.txt",
+	"tests/test7_tricky_operators.txt"
 ]
 
 for test_file in test_files:
