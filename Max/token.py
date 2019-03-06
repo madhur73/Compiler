@@ -44,6 +44,16 @@ TokenType = enum.Enum("TokenType", """
 """) # Note no OP_UMINUS.
 
 class Token:
+    """Represents a token.
+    
+    - type is a TokenType.
+    - string is the value of the token, which may be modified (e.g. truncated) from
+      exactly how it appeared in the source.
+    - [begin, end) represents the character indices in the source file for where the
+      token appeared, before any truncation or other post-processing.
+    - line and column are the human-readable (1-based) coordinates of begin.
+    """
+    
     def __init__(self, type, string, begin, end, line, column):
         self.type = type
         self.string = string
