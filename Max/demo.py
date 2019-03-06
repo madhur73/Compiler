@@ -1,4 +1,5 @@
 from scanner import Scanner
+from sys import stdin
 
 test_files = [
 	"tests/test1_all_tokens.txt",
@@ -32,3 +33,9 @@ for test_file in test_files:
 	
 	print()
 	print()
+
+print("Now reading tokens from standard input.  Press Ctrl+D to end input.")
+print("=======================")
+s = Scanner(file=stdin)
+for token in s:
+	print(token)
