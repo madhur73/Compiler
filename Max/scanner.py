@@ -82,6 +82,8 @@ class Scanner:
         If a file is provided, it will not be closed.
         
         Comment tokens will be included in the output stream only if emit_comments is true.
+        
+        Non-ASCII is accepted in comments, but rejected everywhere else.
         """
         
         if filepath:
