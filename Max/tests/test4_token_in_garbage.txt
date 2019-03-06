@@ -1,0 +1,7 @@
+*** Even though this is mostly garbage, the embedded valid tokens should be picked up.
+*** Integer literal:
+#!#!#!123#!#!#!
+*** ID:
+#!#!#!Hello#!#!#!
+*** Keyword and operator:
+#!#!#!foreach#!#!#!<=#!#!#!

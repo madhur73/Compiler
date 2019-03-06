@@ -1,0 +1,9 @@
+*** IDs should not be confused for keywords even when they start with a valid keyword.
+*** Keyword:
+foreach
+*** ID:
+foreach_
+*** ID:
+foreachforeach
+*** ID:
+abcforeachabc
