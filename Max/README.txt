@@ -1,7 +1,11 @@
 A demo script is provided to run the scanner on the included test files.
 Run from this directory:
 
-	python3 demo.py
+	python3 demo_tests.py
+	
+Or to give custom input through stdin:
+	
+	python3 demo_stdin.py
 
 The module was tested on Python 3.6.7.
 
