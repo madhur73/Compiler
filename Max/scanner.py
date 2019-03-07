@@ -105,7 +105,7 @@ class Scanner:
     
     # Print a warning with a position tag from the current position with a length of error_length.
     def _warn(self, message, error_length):
-        print(f"{self._line}:{self._column}-{self._line}:{self._column+error_length} Warning: {message}")
+        print("{}:{}-{}:{} Warning: {}".format(self._line, self._column, self._line, self._column+error_length, message))
     
     def _advance_b(self, amount):
         self._b += amount
@@ -132,16 +132,16 @@ class Scanner:
             token_type, raw_value = _next_token(self._s, self._b)
             
             if token_type is None:
-                self._warn(f'unrecognized character "{self._s[self._b]}".', 1)
+                self._warn('unrecognized character "{}".'.format(self._s[self._b]), 1)
                 self._advance_b(1)
                 continue
             
             value = raw_value
             if token_type == TokenType.ID and len(raw_value) > 80:
-                self._warn(f'identifier "{raw_value}" will be truncated to 80 characters.', len(raw_value))
+                self._warn('identifier "{}" will be truncated to 80 characters.'.format(raw_value), len(raw_value))
                 value = raw_value[:80]
             elif token_type == TokenType.INT_LIT and int(raw_value) >= 2**31:
-                self._warn(f'integer "{raw_value}" will be clamped to 2^31-1.', len(raw_value))
+                self._warn('integer "{}" will be clamped to 2^31-1.'.format(raw_value), len(raw_value))
                 value = str(2**31 - 1)
             
             token = Token(token_type, value, self._b, self._b+len(raw_value), self._line, self._column)

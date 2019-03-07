@@ -63,4 +63,4 @@ class Token:
         self.column = column
     
     def __str__(self):
-        return f'{self.line}:{self.column} ({self.begin}-{self.end}) {self.type} "{self.string}"'
+        return '{}:{} ({}-{}) {} "{}"'.format(self.line, self.column, self.begin, self.end, self.type, self.string)
