@@ -23,19 +23,14 @@ for test_file in test_files:
 	print(s.peek())
 	print()
 	
-	# Scanner objects are iterable.  This is equivalent to calling s.next() in a loop.
-	# Errors will be printed to stdout.
-	tokens = list(s)
-	
-	print("Scanned", len(tokens), "tokens: (line:col (begin-end) TYPE \"value\")")
-	for token in tokens:
+	count = 0
+	print("All tokens: (line:col (begin-end) TYPE \"value\")")
+	for token in s:
+		# Scanner objects are iterable.  This is equivalent to calling s.next() in a loop.
+		# Errors will be printed to stdout.
 		print(token)
+		count += 1
+	print("Done.  Scanned", count, "tokens.")
 	
 	print()
 	print()
-
-print("Now reading tokens from standard input.  Press Ctrl+D to end input.")
-print("=======================")
-s = Scanner(file=stdin)
-for token in s:
-	print(token)
