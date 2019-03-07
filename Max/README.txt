@@ -1,3 +1,5 @@
+Madhur Biyani and Max Marrone
+
 A demo script is provided to run the scanner on the included test files.
 Run from this directory:
 
