@@ -67,7 +67,7 @@ def _next_token(source, begin):
     if match:
         matched_group_index = match.lastindex - 1
         token_type, _ = _patterns[matched_group_index]
-        value = match[0]
+        value = match.group()
         if token_type == TokenType.ID:
             token_type = _keywords.get(value, TokenType.ID)
         return token_type, value
