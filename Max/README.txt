@@ -6,6 +6,8 @@ Run from this directory:
 Or to give custom input through stdin:
 	
 	python3 demo_stdin.py
+	
+	"press ctrl + d to exit the input and ctrl + c to quit the program"
 
 The module was tested on Python 3.6.7.
 
