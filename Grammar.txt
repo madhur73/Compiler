@@ -1,0 +1,26 @@
+expr = // XXX *ascending* order of precedence: from least important to most important
+    | expr COMMA expr // tuple constuctor
+    | expr ( "+" | "-" ) expr
+    | expr ( "*" | "/" ) expr
+    // XXX there is no more unary minus!!
+    | LPAR expr RPAR
+    | ID
+    | ID expr // function call, right-associative
+    | ID DOT INT // tuple reference
+    | ID LBRAK expr RBRAK // array element reference
+    // XXX this was missing!
+    | INT
+
+
+With precedence encoded:
+
+expr = tuple-expr
+tuple-expr = addition-expr ("," addition-expr)*
+addition-expr = multiplication-expr (("+"|"-") multiplication-expr)*
+multiplication-expr = paren-expr (("*"|"/") paren-expr)*
+paren-expr = id-expr | "(" id-expr ")"
+id-expr = ID
+        | ID expr
+        | ID DOT INT
+        | ID LBRAK expr RBRAK
+        | INT
