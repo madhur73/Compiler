@@ -18,7 +18,7 @@ expr = tuple-expr
 tuple-expr = addition-expr ("," addition-expr)*
 addition-expr = multiplication-expr (("+"|"-") multiplication-expr)*
 multiplication-expr = paren-expr (("*"|"/") paren-expr)*
-paren-expr = id-expr | "(" id-expr ")"
+paren-expr = id-expr | "(" expr ")"
 id-expr = ID
         | ID expr
         | ID DOT INT
