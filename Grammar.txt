@@ -20,7 +20,9 @@ addition-expr = multiplication-expr (("+"|"-") multiplication-expr)*
 multiplication-expr = paren-expr (("*"|"/") paren-expr)*
 paren-expr = id-expr | "(" expr ")"
 id-expr = ID
-        | ID expr
+        | ID id-expr
         | ID DOT INT
         | ID LBRAK expr RBRAK
         | INT
+
+
