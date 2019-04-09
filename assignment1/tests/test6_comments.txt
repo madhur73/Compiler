@@ -1,4 +1,0 @@
-********* This is one comment token.
-********* This is another.  Testing keywords in a comment:
-********* foreach if else 
-***abc***
