@@ -2,11 +2,59 @@ from token import *
 from ast import *
 import scanner
 
+class ParseError:
+	def __init__(self, message):
+		self.message = message
+
+def is_error(x):
+	return instanceof(x, ParseError)
+
+
 def try_consume(scanner, token_type):
 	if scanner.peek().type == token_type:
 		return scanner.next()
 	else:
 		return None
+
+def parse_input(scanner):
+	parts = []
+	while True:
+		part = parse_statement(scanner)
+		if not part:
+			part = parse_declaration(scanner)
+		if not part:
+			part = parse_definition(scanner)
+		if not part:
+			break
+		parts += [part]
+	return Input(parts)
+
+def parse_declaration(scanner):
+	# Parse array declarations...
+	if try_consume(TokenType.KW_ARRAY):
+		identifier = try_consume(scanner, TokenType.ID)
+		if not identifier:
+			return ParseError("Expected identifier in array declaration.")
+		if not try_consume(scanner, TokenType.LBRAK):
+			return ParseError("Expected \"[\" in array declaration.")
+		range_ = parse_range(scanner)
+		if is_error(range_):
+			return range_
+		if not try_consume(scanner, TokenType.RBRAK):
+			return ParseError("Expected \"]\" in array declaration.")
+		index_identifier = try_consume(scanner, TokenType.ID)
+		index_expression = None
+		if index_identifier:
+			if not try_consume(scanner, TokenType.ASSIGN):
+				return ParseError("Expected \"=\" in array indexing expression.")
+			index_expression = parse_expression(scanner)
+			if is_error(index_expression):
+				return index_expression
+		if not try_consume(scanner, TokenType.SEMI):
+			return ParseError("Expected \";\" after array declaration.")
+		return ArrayDeclaration(identifier, range_, index_identifier, index_expression)
+	
+	# To do: parse other kinds of declarations.
 
 def parse_expression(scanner):
 	return parse_tuple_expression(scanner)

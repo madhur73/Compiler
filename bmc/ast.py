@@ -32,6 +32,16 @@ class Input(Node):
 	def __init__(self, parts):
 		self.parts = parts
 
+class Declaration(Node):
+	pass
+
+class ArrayDeclaration(Declaration):
+	def __init__(self, identifier, range, index_identifier, index_expression):
+		self.identifier = identifier
+		self.range = range
+		self.index_identifier = index_identifier
+		self.index_expression = index_expression
+	
 class Statement(Node):
 	pass
 
