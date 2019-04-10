@@ -6,7 +6,7 @@ class ParseError:
 	def __init__(self, message):
 		self.message = message
 	def __str__(self):
-		return self.message
+		return "Parse error: " + self.message
 
 def is_error(x):
 	return isinstance(x, ParseError)
@@ -57,7 +57,25 @@ def parse_declaration(scanner):
 			return ParseError("Expected \";\" after array declaration.")
 		return ArrayDeclaration(identifier, range_, index_identifier, index_expression)
 	
-	# To do: parse other kinds of declarations.
+	# Parse non-array (global or local) declarations...
+	else:
+		if try_consume(scanner, TokenType.KW_LOCAL):
+			NodeType = LocalDeclaration
+		elif try_consume(scanner, TokenType.KW_GLOBAL):
+			NodeType = GlobalDeclaration
+		else:
+			return ParseError("Expected \"array\", \"global\", or \"local\" in declaration.")
+		identifier = try_consume(scanner, TokenType.ID)
+		if not identifier:
+			return ParseError("Expected identifier in declaration.")
+		if not try_consume(scanner, TokenType.ASSIGN):
+			return ParseError("Expected \"=\" in declaration.")
+		expression = parse_expression(scanner)
+		if is_error(expression):
+			return expression
+		if not try_consume(scanner, TokenType.SEMI):
+			return ParseError("Expected \";\" after declaration.")
+		return NodeType(identifier, expression)
 
 def parse_range(scanner):
 	begin_expression = parse_expression(scanner)
@@ -145,7 +163,7 @@ def parse_id_expression(scanner):
 	else:
 		return ParseError("Invalid expression.")
 
-s = scanner.Scanner(string="array a[0..10] i=i*2;")
+s = scanner.Scanner(string="global i = h i j k;")
 p = parse_declaration(s)
 print(p)		
 		

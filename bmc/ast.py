@@ -41,7 +41,14 @@ class ArrayDeclaration(Declaration):
 		self.range = range
 		self.index_identifier = index_identifier
 		self.index_expression = index_expression
-	
+
+class NonArrayDeclaration(Declaration):
+	def __init__(self, identifier, expression):
+		self.identifier = identifier
+		self.expression = expression
+class LocalDeclaration(NonArrayDeclaration): pass
+class GlobalDeclaration(NonArrayDeclaration): pass
+
 class Statement(Node):
 	pass
 
