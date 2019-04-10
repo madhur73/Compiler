@@ -1,7 +1,7 @@
 import re
 import string
     
-from token import *
+from bmc.token import *
 
 # Each token type corresponds to a regular expression pattern.  Each pattern is
 # wrapped as a group, and those groups are concatenated into one big mega-regex.

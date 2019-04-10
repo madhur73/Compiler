@@ -1,13 +1,15 @@
-from token import *
-from ast import *
-import scanner
+from bmc.ast import *
+from bmc import scanner
+from bmc.token import TokenType
 
 class ParseError:
 	def __init__(self, message):
 		self.message = message
+	def __str__(self):
+		return self.message
 
 def is_error(x):
-	return instanceof(x, ParseError)
+	return isinstance(x, ParseError)
 
 
 def try_consume(scanner, token_type):
@@ -31,7 +33,7 @@ def parse_input(scanner):
 
 def parse_declaration(scanner):
 	# Parse array declarations...
-	if try_consume(TokenType.KW_ARRAY):
+	if try_consume(scanner, TokenType.KW_ARRAY):
 		identifier = try_consume(scanner, TokenType.ID)
 		if not identifier:
 			return ParseError("Expected identifier in array declaration.")
@@ -40,6 +42,7 @@ def parse_declaration(scanner):
 		range_ = parse_range(scanner)
 		if is_error(range_):
 			return range_
+		print(scanner.peek())
 		if not try_consume(scanner, TokenType.RBRAK):
 			return ParseError("Expected \"]\" in array declaration.")
 		index_identifier = try_consume(scanner, TokenType.ID)
@@ -56,7 +59,19 @@ def parse_declaration(scanner):
 	
 	# To do: parse other kinds of declarations.
 
+def parse_range(scanner):
+	begin_expression = parse_expression(scanner)
+	if is_error(begin_expression):
+		return begin_expression
+	if not try_consume(scanner, TokenType.OP_DOTDOT):
+		return ParseError("Expected \"..\" in range expression.")
+	end_expression = parse_expression(scanner)
+	if is_error(end_expression):
+		return end_expression
+	return Range(begin_expression, end_expression)
+	
 def parse_expression(scanner):
+	print("parse_expression", scanner.peek())
 	return parse_tuple_expression(scanner)
 
 def parse_tuple_expression(scanner):
@@ -70,8 +85,8 @@ def parse_tuple_expression(scanner):
 
 def parse_addition_expression(scanner):
 	left = parse_multiplication_expression(scanner)
-	if not left:
-		return None
+	if is_error(left):
+		return left
 	while scanner.peek().type in (TokenType.OP_PLUS, TokenType.OP_MINUS):
 		if scanner.next().type == TokenType.OP_PLUS:
 			Node = AddExpression
@@ -83,8 +98,8 @@ def parse_addition_expression(scanner):
 
 def parse_multiplication_expression(scanner):
 	left = parse_parenthesized_expression(scanner)
-	if not left:
-		return None
+	if is_error(left):
+		return left
 	while scanner.peek().type in (TokenType.OP_MULT, TokenType.OP_DIV):
 		if scanner.next().type == TokenType.OP_MULT:
 			Node = MultiplyExpression
@@ -106,6 +121,7 @@ def parse_parenthesized_expression(scanner):
 		return parse_id_expression(scanner)
 
 def parse_id_expression(scanner):
+	print("parse_id_expression", scanner.peek())
 	id_token = try_consume(scanner, TokenType.ID)
 	if id_token:
 		if try_consume(scanner, TokenType.OP_DOT):
@@ -127,9 +143,9 @@ def parse_id_expression(scanner):
 	elif scanner.peek().type == TokenType.INT_LIT:
 		return IntegerLiteralExpression(scanner.next())
 	else:
-		print("Error: invalid expression.")
+		return ParseError("Invalid expression.")
 
-s = scanner.Scanner(string="sq a + sq b")
-p = parse_expression(s)
+s = scanner.Scanner(string="array a[0..10] i=i*2;")
+p = parse_declaration(s)
 print(p)		
 		

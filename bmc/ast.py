@@ -1,4 +1,4 @@
-import token
+from bmc import token
 
 class Node:
 	"""Base class for all abstract syntax tree nodes.
