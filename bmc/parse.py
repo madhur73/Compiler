@@ -77,6 +77,42 @@ def parse_declaration(scanner):
 			return ParseError("Expected \";\" after declaration.")
 		return NodeType(identifier, expression)
 
+def parse_definition(scanner):
+	if not try_consume(scanner, TokenType.KW_DEFUN):
+		return ParseError("Expected \"defun\" in function definiton.")
+	function_identifier = try_consume(scanner, TokenType.ID)
+	if not function_identifier:
+		return ParseError("Expected function identifier.")
+	if not try_consume(scanner, TokenType.LPAR):
+		return ParseError("Expected \"(\" after function identifier.")
+	first_argument_identifier = try_consume(scanner, TokenType.ID)
+	if not first_argument_identifier:
+		return ParseError("Function definitions must have at least one argument.")
+	argument_identifiers = [first_argument_identifier]
+	while try_consume(scanner, TokenType.OP_COMMA):
+		next_argument_identifier = try_consume(scanner, TokenType.ID)
+		if not next_argument_identifier:
+			return ParseError("Expected another argument identifier after comma in argument list.")
+		argument_identifiers += [next_argument_identifier]
+	if not try_consume(scanner, TokenType.RPAR):
+		return ParseError("Expected \")\" after argument list.")
+	
+	# Parse body.
+	body = []
+	while True:
+		statement_or_declaration = parse_statement(scanner)
+		if is_error(statement_or_declaration):
+			statement_or_declaration = parse_declaration(scanner)
+		if is_error(statement_or_declaration):
+			break
+		body += statement_or_declaration
+		
+	if not try_consume(TokenType.KW_END):
+		return ParseError("Expected \"END\" after function definition.")
+	if not try_consume(TokenType.KW_DEFUN):
+		return ParseError("Expected \"DEFUN\" after function definition.")
+	return FunctionDefinition(function_identifier, argument_identifiers, body)
+	
 def parse_range(scanner):
 	begin_expression = parse_expression(scanner)
 	if is_error(begin_expression):
@@ -87,7 +123,7 @@ def parse_range(scanner):
 	if is_error(end_expression):
 		return end_expression
 	return Range(begin_expression, end_expression)
-	
+
 def parse_expression(scanner):
 	print("parse_expression", scanner.peek())
 	return parse_tuple_expression(scanner)
@@ -163,7 +199,8 @@ def parse_id_expression(scanner):
 	else:
 		return ParseError("Invalid expression.")
 
-s = scanner.Scanner(string="global i = h i j k;")
-p = parse_declaration(s)
-print(p)		
+s = scanner.Scanner(string="defun func(arga, argb) end defun")
+p = parse_definition(s)
+print(p)
+print(s.peek())
 		

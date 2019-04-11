@@ -49,6 +49,12 @@ class NonArrayDeclaration(Declaration):
 class LocalDeclaration(NonArrayDeclaration): pass
 class GlobalDeclaration(NonArrayDeclaration): pass
 
+class FunctionDefinition(Node):
+	def __init__(self, function_identifier, argument_identifiers, body):
+		self.function_identifier = function_identifier
+		self.argument_identifiers = argument
+		self.body = body
+
 class Statement(Node):
 	pass
 
