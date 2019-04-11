@@ -48,7 +48,6 @@ def parse_declaration(scanner):
 		range_ = parse_range(scanner)
 		if is_error(range_):
 			return range_.tack_on("in array declaration")
-		print(scanner.peek())
 		if not try_consume(scanner, TokenType.RBRAK):
 			return ParseError("Expected \"]\" in array declaration.")
 		index_identifier = try_consume(scanner, TokenType.ID)
@@ -171,8 +170,8 @@ def parse_statement(scanner):
 			if is_error(else_statements):
 				return else_statements.tack_on("in else statement")
 			rightmost_node.else_statements = else_statements
-			if not (try_consume(scanner, TokenType.KW_END) and try_consume(scanner, TokenType.KW_IF)):
-				return ParseError("Expected \"end if\" after if-elsif-else.")
+		if not (try_consume(scanner, TokenType.KW_END) and try_consume(scanner, TokenType.KW_IF)):
+			return ParseError("Expected \"end if\" after if-elsif-else.")
 		return root_node
 	elif try_consume(scanner, TokenType.KW_FOREACH):
 		identifier = try_consume(scanner, TokenType.ID)
