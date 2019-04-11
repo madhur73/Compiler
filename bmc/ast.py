@@ -18,8 +18,13 @@ class Node:
 			lines = string.split("\n")
 			indented_lines = ("  " + line for line in lines)
 			return "\n".join(indented_lines)
+		def pretty(value):
+			if isinstance(value, list):
+				return "[\n" + indented("\n".join(str(e) for e in value)) + "\n]"
+			else:
+				return str(value)
 		result = type(self).__name__
-		child_strings = [name + " = " + str(value) for name, value in self.children()]
+		child_strings = [name + " = " + pretty(value) for name, value in self.children()]
 		if child_strings:
 			result += "\n"
 			result += "\n".join(indented(child_string) for child_string in child_strings)
@@ -52,7 +57,7 @@ class GlobalDeclaration(NonArrayDeclaration): pass
 class FunctionDefinition(Node):
 	def __init__(self, function_identifier, argument_identifiers, body):
 		self.function_identifier = function_identifier
-		self.argument_identifiers = argument
+		self.argument_identifiers = argument_identifiers
 		self.body = body
 
 class Statement(Node):
