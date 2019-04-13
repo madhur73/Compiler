@@ -29,11 +29,18 @@ def parse_any(scanner, parsers):
 	position, without rolling back the scanner.
 	"""
 	expected = set()
+	original_next_token = scanner.peek()
 	for parser in parsers:
 		try:
 			return parser(scanner)
 		except ParseError as parse_error:
-			expected |= parse_error.expected
+			if scanner.peek() == original_next_token:
+				# OK: merely a failure to parse that alternative.
+				expected |= parse_error.expected
+			else:
+				# Error: alternative failed mid-way through, after we had
+				# committed to it.
+				raise parse_error
 	raise ParseError(expected=expected)
 
 def parse_repeating(scanner, parser):
@@ -329,37 +336,10 @@ def parse_id_expression(scanner):
 		else:
 			try:
 				argument_expression = parse_parenthesized_expression(scanner)
-				return FunctioncallExpression(id_token, argument_expression)
+				return FunctionCallExpression(id_token, argument_expression)
 			except ParseError:
 				return IdentifierExpression(id_token)
 	elif scanner.peek().type == T.INT_LIT:
 		return IntegerLiteralExpression(scanner.next())
 	else:
 		return ParseError(expected=set([T.ID, T.INT_LIT]))
-
-source = """
-global a = 1, 2, 3;
-
-defun main(argA, argB, argC)
-	local b = 456;
-	if 1 == 1 then
-		x=1;
-		if 2 == 2 then
-			x=2;
-			if 3 == 3 then
-				x = 3;
-			end if
-		end if
-	end if
-end defun
-"""
-s = scanner.Scanner(emit_comments=False, string=source)
-try:
-	p = parse_program(s)
-	print(p)
-except ParseError as e:
-	print("Error.")
-	print("Got", s.peek())
-	print("But expected " + " or ".join(str(t) for t in e.expected))
-	raise e
-		
