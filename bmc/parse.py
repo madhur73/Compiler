@@ -36,8 +36,10 @@ def parse_any(scanner, parsers):
 		except ParseError as parse_error:
 			if scanner.peek() == original_next_token:
 				# OK: merely a failure to parse that alternative.
+				print("failure OK")
 				expected |= parse_error.expected
 			else:
+				print(parser.__name__, "failure is actually a failure")
 				# Error: alternative failed mid-way through, after we had
 				# committed to it.
 				raise parse_error
@@ -59,9 +61,15 @@ def parse_repeating(scanner, repeating_parser, next_token):
 	repeating_parser_results = []
 	try:
 		while True:
+			start_token = scanner.peek()
 			repeating_parser_results += [repeating_parser(scanner)]
 	except ParseError as error:
-		expected = error.expected.copy()
+		if scanner.peek() != start_token:
+			# Error was a legitimate error in the middle of repeating_parser,
+			# not merely a signal that the repetitions have ended.
+			raise error
+		else:
+			expected = error.expected.copy()
 	try:
 		if next_token is not None:
 			parse_token(scanner, next_token)
@@ -206,10 +214,12 @@ def parse_if_statement(scanner):
 
 def parse_foreach_statement(scanner):
 	_, identifier, _ = parse_token_sequence(scanner, [T.KW_FOREACH, T.ID, T.KW_IN])
+	print("before")
 	source_range_or_identifier = parse_any(scanner, [
 		parse_range,
 		lambda s: parse_token(s, T.ID)
 	])
+	print("after")
 	parse_token(scanner, T.KW_DO)
 	statements = parse_statement_list(scanner, T.KW_END)
 	parse_token_sequence(scanner, [T.KW_FOR])
