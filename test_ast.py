@@ -14,6 +14,5 @@ for i in range(7):
 	print("------------------------- AST ---------------------------------")
 
 	s = scanner.Scanner(emit_comments = False,filepath="tests/p2test"+str(i)+".txt")
-	p = parse_declaration(s)
-	print(p)		
+	parse_report_errors(s)
 		

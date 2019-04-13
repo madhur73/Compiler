@@ -3,6 +3,16 @@ from bmc import scanner
 from bmc.token import TokenType as T
 from copy import copy
 
+def parse_report_errors(scanner):
+	try:
+		ast = parse_program(scanner)
+		print("Success!")
+		print(ast)
+	except ParseError as error:
+		print("Error.")
+		print("Got", scanner.peek())
+		print("But expected " + " or ".join(str(t) for t in error.expected))
+
 class ParseError(Exception):
 	"""Exception for parse errors.
 	
