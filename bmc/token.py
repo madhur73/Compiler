@@ -64,3 +64,10 @@ class Token:
     
     def __str__(self):
         return '{}:{} ({}-{}) {} "{}"'.format(self.line, self.column, self.begin, self.end, self.type, self.string)
+    
+    def __eq__(self, other):
+        if isinstance(other, Token):
+            return (self.type, self.string, self.begin, self.end, self.line, self.column) \
+            == (other.type, other.string, other.begin, other.end, other.line, other.column)
+        else:
+            return NotImplemented
