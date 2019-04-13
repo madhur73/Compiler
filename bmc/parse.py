@@ -12,7 +12,7 @@ def parse_report_errors(scanner):
 		print("Error.")
 		print("Got", scanner.peek())
 		print("But expected " + " or ".join(str(t) for t in error.expected))
-
+	
 class ParseError(Exception):
 	"""Exception for parse errors.
 	
@@ -115,7 +115,7 @@ def parse_program(scanner):
 def parse_array_declaration(scanner):
 	_, identifier, _ = parse_token_sequence(scanner, [T.KW_ARRAY, T.ID, T.LBRAK])
 	range = parse_range(scanner)
-	parse_token(T.RBRAK)
+	parse_token(scanner, T.RBRAK)
 	
 	# Parse optional initialization expression.
 	try:
@@ -210,7 +210,7 @@ def parse_if_statement(scanner):
 		elsif_condition = parse_boolean_expression(scanner)
 		parse_token(scanner, T.KW_THEN)
 		elsif_statements = parse_statement_list(scanner, None)
-		new_node = IfStatement(elsif_conditon, elsif_statements, [])
+		new_node = IfStatement(elsif_condition, elsif_statements, [])
 		rightmost_node.else_statements = [new_node]
 		rightmost_node = new_node
 	if scanner.peek().type == T.KW_ELSE:
