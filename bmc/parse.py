@@ -1,25 +1,69 @@
 from bmc.ast import *
 from bmc import scanner
-from bmc.token import TokenType
+from bmc.token import TokenType as T
+from copy import copy
 
-class ParseError:
-	"""When encountering an error, parse functions return this instead of an AST node."""
-	def __init__(self, message):
-		self.message = message
-	def __str__(self):
-		return "Parse error: " + self.message
-	def tack_on(self, message):
-		return ParseError(self.message + " " + message)
+class ParseError(Exception):
+	"""Exception for parse errors.
+	
+	This is thrown by the parser upon encountering a syntax error.  Higher
+	levels of the parser may catch it to attempt error recovery.  This is also
+	used to implement alternatives in the grammar: when the first choice fails,
+	it throws this exception, signifying that the second choice should be tried.
+	
+	expected is a set of TokenTypes that would have avoided this error.
+	"""
+	def __init__(self, expected):
+		self.expected = expected
 
-def is_error(x):
-	return isinstance(x, ParseError)
+def parse_any(scanner, parsers):
+	"""Implements parsing alternatives, e.g. "A = B|C".
+	
+	parsers is an iterable of recursive descent parsing functions taking a single
+	Scanner argument.  Each is attempted in order.  The result of the first one
+	not to throw a ParseError is returned.  If they all throw ParseErrors, a new
+	ParseError is thrown.
+	
+	This assumes that the alternatives are all left-factored.  A parser may only
+	fail in a context where the next alternative can pick up from the same
+	position, without rolling back the scanner.
+	"""
+	expected = set()
+	for parser in parsers:
+		try:
+			return parser(scanner)
+		except ParseError as parse_error:
+			expected |= parse_error.expected
+	raise ParseError(expected=expected)
 
-def try_consume(scanner, token_type):
-	"""Returns the next token if its type matches token_type, else None."""
+def parse_repeating(scanner, parser):
+	"""Implements parsing repetitions, e.g. "A = B*".
+	
+	parser(scanner) is repeatedly called until it fails.  A list of all the results
+	is returned.  This may result in an empty list.
+	"""
+	result = []
+	try:
+		while True:
+			result += [scanner(parser)]
+	except ParseError:
+		pass
+	return result
+
+def parse_token(scanner, token_type):
+	"""Parses a token, given a token type that it must match.
+	
+	The actual Token object, which includes the token string, is returned.
+	If the token does not match, a ParseError is raised before it is consumed.
+	"""
 	if scanner.peek().type == token_type:
 		return scanner.next()
 	else:
-		return None
+		raise ParseError(expected=set([token_type]))
+
+def parse_token_sequence(scanner, token_types):
+	"""Like parse_token, but parses multiple tokens in sequence, and returns a list of Token objects."""
+	return [parse_token(scanner, t) for t in token_types]
 
 def parse_input(scanner):
 	parts = []
@@ -37,230 +81,208 @@ def parse_input(scanner):
 	else:
 		return part
 
-def parse_declaration(scanner):
-	# Parse array declarations...
-	if try_consume(scanner, TokenType.KW_ARRAY):
-		identifier = try_consume(scanner, TokenType.ID)
-		if not identifier:
-			return ParseError("Expected identifier in array declaration.")
-		if not try_consume(scanner, TokenType.LBRAK):
-			return ParseError("Expected \"[\" in array declaration.")
-		range_ = parse_range(scanner)
-		if is_error(range_):
-			return range_.tack_on("in array declaration")
-		if not try_consume(scanner, TokenType.RBRAK):
-			return ParseError("Expected \"]\" in array declaration.")
-		index_identifier = try_consume(scanner, TokenType.ID)
-		index_expression = None
-		if index_identifier:
-			if not try_consume(scanner, TokenType.ASSIGN):
-				return ParseError("Expected \"=\" in array indexing expression.")
-			index_expression = parse_expression(scanner)
-			if is_error(index_expression):
-				return index_expression.tack_on("in array declaration")
-		if not try_consume(scanner, TokenType.SEMI):
-			return ParseError("Expected \";\" after array declaration.")
-		return ArrayDeclaration(identifier, range_, index_identifier, index_expression)
+def parse_array_declaration(scanner):
+	_, identifier, _ = parse_token_sequence(scanner, [T.KW_ARRAY, T.ID, T.LBRAK])
+	range = parse_range(scanner)
+	parse_token(TokenType.RBRAK)
 	
-	# Parse non-array (global or local) declarations...
+	# Parse optional initialization expression.
+	try:
+		index_identifier = parse_token(scanner, T.ID)
+	except ParseError:
+		index_identifier = None
+	if index_identifier is not None:
+		parse_token(scanner, T.ASSIGN)
+		index_expression = parse_expression(scanner)
+		pass
 	else:
-		if try_consume(scanner, TokenType.KW_LOCAL):
-			NodeType = LocalDeclaration
-		elif try_consume(scanner, TokenType.KW_GLOBAL):
-			NodeType = GlobalDeclaration
-		else:
-			return ParseError("Expected \"array\", \"global\", or \"local\" in declaration.")
-		identifier = try_consume(scanner, TokenType.ID)
-		if not identifier:
-			return ParseError("Expected identifier in declaration.")
-		if not try_consume(scanner, TokenType.ASSIGN):
-			return ParseError("Expected \"=\" in declaration.")
-		expression = parse_expression(scanner)
-		if is_error(expression):
-			return expression.tack_on("in declaration")
-		if not try_consume(scanner, TokenType.SEMI):
-			return ParseError("Expected \";\" after declaration.")
-		return NodeType(identifier, expression)
+		index_expression = None
+	
+	parse_token(scanner, T.SEMI)
+	
+	return ArrayDeclaration(identifier, range, index_identifier, index_expression)
+
+def parse_non_array_declaration(scanner):
+	def parse_local(scanner):
+		return parse_token(scanner, T.KW_LOCAL)
+	def parse_global(scanner):
+		return parse_token(scanner, T.KW_GLOBAL)
+	NodeType = {
+		T.KW_LOCAL: LocalDeclaration,
+		T.KW_GLOBAL: GlobalDeclaration
+	}[parse_any(scanner, [parse_local, parse_global]).type]
+	
+	identifier, _ = parse_token_sequence(scanner, [T.ID, T.ASSIGN])
+	expression = parse_expression(scanner)
+	parse_token(scanner, T.SEMI)
+	return NodeType(identifier, expression)
+
+def parse_declaration(scanner):
+	return parse_any(scanner, [
+	    parse_array_declaration,
+	    parse_non_array_declaration
+	])
 
 def parse_definition(scanner):
-	if not try_consume(scanner, TokenType.KW_DEFUN):
-		return ParseError("Expected \"defun\" in function definiton.")
-	function_identifier = try_consume(scanner, TokenType.ID)
-	if not function_identifier:
-		return ParseError("Expected function identifier.")
-	if not try_consume(scanner, TokenType.LPAR):
-		return ParseError("Expected \"(\" after function identifier.")
-	first_argument_identifier = try_consume(scanner, TokenType.ID)
-	if not first_argument_identifier:
-		return ParseError("Function definitions must have at least one argument.")
-	argument_identifiers = [first_argument_identifier]
-	while try_consume(scanner, TokenType.OP_COMMA):
-		next_argument_identifier = try_consume(scanner, TokenType.ID)
-		if not next_argument_identifier:
-			return ParseError("Expected another argument identifier after comma in argument list.")
-		argument_identifiers += [next_argument_identifier]
-	if not try_consume(scanner, TokenType.RPAR):
-		return ParseError("Expected \")\" after argument list.")
+	_, identifier, _ = parse_token_sequence(scanner, [T.KW_DEFUN, T.ID, T.LPAR])
+	
+	# Parse argument list.  At least one argument is required.
+	argument_identifiers = [parse_token(scanner, T.ID)]
+	def parse_next_id(scanner):
+		parse_token(scanner, T.OP_COMMA)
+		return parse_token(scanner, T.ID)
+	argument_identifiers += parse_repeating(scanner, parse_next_id)
+	parse_token(scanner, T.RPAR)
 	
 	# Parse body.
-	body = []
-	while True:
-		statement_or_declaration = parse_statement(scanner)
-		if is_error(statement_or_declaration):
-			statement_or_declaration = parse_declaration(scanner)
-		if is_error(statement_or_declaration):
-			break
-		body += [statement_or_declaration]
-		
-	if not try_consume(scanner, TokenType.KW_END):
-		return ParseError("Expected \"end\" after function definition.")
-	if not try_consume(scanner, TokenType.KW_DEFUN):
-		return ParseError("Expected \"end\" after function definition.")
+	def parse_statement_or_declaration(scanner):
+		return parse_any(scanner, [parse_statement, parse_declaration])
+	body = parse_repeating(scanner, parse_statement_or_declaration)
+	
+	parse_token_sequence(scanner, [T.KW_END, T.KW_DEFUN])
+	
 	return FunctionDefinition(function_identifier, argument_identifiers, body)
 
-def parse_statement(scanner):
+def parse_assign_or_exchange_statement(scanner):
 	lhs_list = parse_lhs_list(scanner)
-	if not is_error(lhs_list):
-		if try_consume(scanner, TokenType.ASSIGN):
-			rhs = parse_expression(scanner)
-			if is_error(rhs):
-				return rhs.tack_on("in assignment statement")
-			node = AssignmentStatement(lhs_list, rhs)
-		elif try_consume(scanner, TokenType.EXCHANGE):
-			rhs_list = parse_lhs_list(scanner)
-			if is_error(rhs_list):
-				return rhs_list.tack_on("in exchange statement")
-			node = ExchangeStatement(lhs_list, rhs_list)
-		if not try_consume(scanner, TokenType.SEMI):
-			return ParseError("Expected \";\" after assignment or exchange statement.")
-		return node
-	elif try_consume(scanner, TokenType.KW_WHILE):
-		conditional = parse_boolean_expression(scanner)
-		if is_error(conditional):
-			return conditional.tack_on("in while statement")
-		if not try_consume(TokenType.KW_DO):
-			return ParseError("Expected \"do\" after while conditional.")
-		statements = parse_statement_list(scanner)
-		if not (try_consume(TokenType.KW_END) and try_consume(TokenType.KW_WHILE)):
-			return ParseError("Expected \"end while\" after while loop.")
-		return WhileStatement(condition, statements)
-	elif try_consume(scanner, TokenType.KW_IF):
-		condition = parse_boolean_expression(scanner)
-		if is_error(condition):
-			return condition.tack_on("in if statement")
-		if not try_consume(scanner, TokenType.KW_THEN):
-			return ParseError("Expected \"then\".")
-		statements = parse_statement_list(scanner)
-		root_node = IfStatement(condition, statements, [])
-		rightmost_node = root_node
-		while try_consume(scanner, TokenType.KW_ELSIF):
-			elsif_condition = parse_boolean_expression(scanner)
-			if is_error(elsif_condition):
-				return condition.tack_on("in elsif statement")
-			if not try_consume(scanner, TokenType.KW_THEN):
-				return ParseError("Expected \"then\" after elsif conditional.")
-			elsif_statements = parse_statement_list(scanner)
-			if is_error(elsif_statements):
-				return elsif_statements.tack_on("in elsif statement")
-			new_node = IfStatement(elsif_condition, elsif_statements, [])
-			rightmost_node.else_statements = [new_node]
-			rightmost_node = new_node
-		if try_consume(scanner, TokenType.KW_ELSE):
-			else_statements = parse_statement_list(scanner)
-			if is_error(else_statements):
-				return else_statements.tack_on("in else statement")
-			rightmost_node.else_statements = else_statements
-		if not (try_consume(scanner, TokenType.KW_END) and try_consume(scanner, TokenType.KW_IF)):
-			return ParseError("Expected \"end if\" after if-elsif-else.")
-		return root_node
-	elif try_consume(scanner, TokenType.KW_FOREACH):
-		identifier = try_consume(scanner, TokenType.ID)
-		if not identifier:
-			return ParseError("Expected identifier in foreach")
-			
-		
+	NodeType = {
+		T.ASSIGN: AssignmentStatement,
+		T.EXCHANGE: ExchangeStatement
+	}[parse_any(scanner, [
+	    lambda s: parse_token(s, T.ASSIGN),
+	    lambda s: parse_token(s, T.EXCHANGE)
+	]).type]
+	if NodeType is AssignmentStatement:
+		rhs = parse_expression(scanner)
 	else:
-		return ParseError("Invalid statement.")
+		rhs = parse_lhs_list(scanner)
+	parse_token(scanner, T.SEMI)
+	return NodeType(lhs_list, rhs)
 
+def parse_while_statement(scanner):
+	parse_token(scanner, T.KW_WHILE)
+	conditional = parse_boolean_expression(scanner)
+	parse_token(scanner, T.KW_DO)
+	statements = parse_statement_list(scanner)
+	parse_token_sequence(scanner, [T.KW_END, T.KW_WHILE])
+	return WhileStatement(conditional, statements)
+
+def parse_if_statement(scanner):
+	parse_token(scanner, T.KW_IF)
+	condition = parse_boolean_expression(scanner)
+	parse_token(scanner, T.KW_THEN)
+	statements = parse_statement_list(scanner)
+	
+	root_node = IfStatement(condition, statements, [])
+	rightmost_node = root_node
+	while scanner.peek().type == T.KW_ELSIF:
+		scanner.next()
+		elsif_condition = parse_boolean_expression(scanner)
+		parse_token(scanner, T.KW_THEN)
+		elsif_statements = parse_statement_list(scanner)
+		new_node = IfStatement(elsif_conditon, elsif_statements, [])
+		rightmost_node.else_statements = [new_node]
+		rightmost_node = new_node
+	if scanner.peek().type == T.KW_ELSE:
+		scanner.next()
+		rightmost_node.else_statements = parse_statement_list(scanner)
+	
+	parse_token_sequence(scanner, [T.KW_END, T.KW_IF])
+	return root_node
+
+def parse_foreach_statement(scanner):
+	_, identifier, _ = parse_token_sequence(scanner, [T.KW_FOREACH, T.ID, T.KW_IN])
+	source_range_or_identifier = parse_any(scanner, [
+		parse_range,
+		lambda s: parse_token(s, T.ID)
+	])
+	parse_token(scanner, T.KW_DO)
+	statements = parse_statement_list(scanner)
+	parse_token_sequence(scanner, [T.KW_END, T.KW_FOR])
+	return ForeachStatement(identifier, source_range_or_identifier, statements)
+
+def parse_return_statement(scanner):
+	parse_token(scanner, T.RETURN)
+	expression = parse_expression(scanner)
+	parse_token(scanner, T.SEMI)
+	return ReturnStatement(expression)
+	
+def parse_print_statement(scanner):
+	parse_token(scanner, T.PRINT)
+	expression = parse_expression(scanner)
+	parse_token(scanner, T.SEMI)
+	return PrintStatement(expression)
+
+def parse_statement(scanner):
+	return parse_any(scanner, [
+	    parse_assign_or_exchange_statement,
+	    parse_while_statement,
+	    parse_if_statement,
+	    parse_foreach_statement,
+	    parse_return_statement,
+	    parse_print_statement
+	])
+	
 def parse_statement_list(scanner):
-	statements = []
-	while True:
-		statement = parse_statement(scanner)
-		if is_error(statement):
-			return statements
-		statements += [statement]
+	return parse_repeating(scanner, parse_statement)
 
 def parse_lhs_list(scanner):
-	item = parse_lhs_item(scanner)
-	if is_error(item):
-		return item.tack_on("in lhs list")
-	items = [item]
-	while try_consume(scanner, TokenType.OP_COMMA):
-		next_item = parse_lhs_item(scanner)
-		if is_error(next_item):
-			return next_item.tack_on("in lhs list")
-		items += [next_item]
+	def parse_next_lhs_item(scanner):
+		parse_token(scanner, TokenType.OP_COMMA)
+		return parse_lhs_item(scanner)
+	items = [parse_lhs_item(scanner)]
+	items += parse_repeating(scanner, parse_next_lhs_item)
 	return items
 
 def parse_lhs_item(scanner):
-	id_token = try_consume(scanner, TokenType.ID)
-	if not id_token:
-		return ParseError("Expected identifier in lhs-item.")
-	if try_consume(scanner, TokenType.OP_DOT):
-		integer_literal = try_consume(scanner, TokenType.INT_LIT)
-		if not integer_literal:
-			return ParseError("Error: Index of tuple must be an integer literal.")
+	id_token = parse_token(scanner, T.ID)
+	if scanner.peek().type == T.OP_DOT:
+		scanner.next()
+		integer_literal = parse_token(scanner, T.INT_LIT)
 		return TupleAccessExpression(id_token, integer_literal)
-	elif try_consume(scanner, TokenType.LBRAK):
+	elif scanner.peek().type == T.LBRAK:
+		scanner.next()
 		index_expression = parse_expression(scanner)
-		if not try_consume(scanner, TokenType.RBRAK):
-			return ParseError("Error: Missing ']' to close '['.")
+		parse_token(scanner, T.RBRAK)
 		return ArrayAccessExpression(id_token, index_expression)
 	else:
 		return IdentifierExpression(id_token)
 	
 def parse_range(scanner):
 	begin_expression = parse_expression(scanner)
-	if is_error(begin_expression):
-		return begin_expression.tack_on("in range expression")
-	if not try_consume(scanner, TokenType.OP_DOTDOT):
-		return ParseError("Expected \"..\" in range expression.")
+	parse_token(scanner, T.OP_DOTDOT)
 	end_expression = parse_expression(scanner)
-	if is_error(end_expression):
-		return end_expression.tack_on("in range expression")
 	return Range(begin_expression, end_expression)
 
 def parse_boolean_expression(scanner):
 	left = parse_expression(scanner)
-	if is_error(left):
-		return left.tack_on("in boolean expression")
-	operator = scanner.peek().type
 	NodeType = {
-		TokenType.OP_LESS:         LessThanExpression,
-		TokenType.OP_GREATER:      GreaterThanExpression,
-		TokenType.OP_EQUAL:        EqualsExpression,
-		TokenType.OP_NOTEQUA:      NotEqualsExpression,
-		TokenType.OP_LESSEQUAL:    LessThanEqualsExpression,
-		TokenType.OP_GREATEREQUAL: GreaterThanEqualsExpression,
-	}.get(operator)
-	if NodeType is None:
-		return ParseError("Expected boolean operator in boolean expression.")
-	scanner.next()
+		T.OP_LESS:         LessThanExpression,
+		T.OP_GREATER:      GreaterThanExpression,
+		T.OP_EQUAL:        EqualsExpression,
+		T.OP_NOTEQUA:      NotEqualsExpression,
+		T.OP_LESSEQUAL:    LessThanEqualsExpression,
+		T.OP_GREATEREQUAL: GreaterThanEqualsExpression,
+	}[parse_any(scanner, [
+	    lambda s: parse_token(T.OP_LESS),
+	    lambda s: parse_token(T.OP_GREATER),
+	    lambda s: parse_token(T.OP_EQUAL),
+	    lambda s: parse_token(T.OP_NOTEQUA),
+	    lambda s: parse_token(T.OP_LESSEQUAL),
+	    lambda s: parse_token(T.OP_GREATEREQUAL)
+	]).type]
 	right = parse_expression(scanner)
-	if is_error(right):
-		return right.tack_on("in boolean expression")
 	return NodeType(left, right)
 
 def parse_expression(scanner):
-	expression = parse_tuple_expression(scanner)
-	if is_error(expression):
-		expression = expression.tack_on("in expression")
-	return expression
+	return parse_tuple_expression(scanner)
 
 def parse_tuple_expression(scanner):
 	tuple_elements = [parse_addition_expression(scanner)]
-	while try_consume(scanner, TokenType.OP_COMMA):
-		tuple_elements += [parse_addition_expression(scanner)]
+	def parse_next_tuple_element(scanner):
+		parse_token(scanner, T.OP_COMMA)
+		return parse_addition_expression(scanner)
+	tuple_elements += parse_repeating(scanner, parse_next_tuple_element)
 	if len(tuple_elements) == 1:
 		return tuple_elements[0]
 	else:
@@ -268,8 +290,6 @@ def parse_tuple_expression(scanner):
 
 def parse_addition_expression(scanner):
 	left = parse_multiplication_expression(scanner)
-	if is_error(left):
-		return left
 	while scanner.peek().type in (TokenType.OP_PLUS, TokenType.OP_MINUS):
 		if scanner.next().type == TokenType.OP_PLUS:
 			Node = AddExpression
@@ -281,8 +301,6 @@ def parse_addition_expression(scanner):
 
 def parse_multiplication_expression(scanner):
 	left = parse_parenthesized_expression(scanner)
-	if is_error(left):
-		return left
 	while scanner.peek().type in (TokenType.OP_MULT, TokenType.OP_DIV):
 		if scanner.next().type == TokenType.OP_MULT:
 			Node = MultiplyExpression
@@ -293,38 +311,37 @@ def parse_multiplication_expression(scanner):
 	return left
 
 def parse_parenthesized_expression(scanner):
-	open_parenthesis = try_consume(scanner, TokenType.LPAR)
-	if open_parenthesis:
+	try:
+		parse_token(scanner, T.LPAR)
+		parenthesized = True
+	except ParseExpression:
+		parenthesized = False
+	if parenthesized:
 		internal_expression = parse_expression(scanner)
-		if not try_consume(scanner, TokenType.RPAR):
-			return ParseError("Error: Missing ')' to close '('.")
-		return internal_expression
+		parse_token(scanner, T.RPAR)
 	else:
-		return parse_id_expression(scanner)
+		internal_expression = parse_id_expression(scanner)
+	return internal_expression
 		
 def parse_id_expression(scanner):
-	id_token = try_consume(scanner, TokenType.ID)
+	id_token = try_consume(scanner, T.ID)
 	if id_token:
-		if try_consume(scanner, TokenType.OP_DOT):
-			integer_literal = try_consume(scanner, TokenType.INT_LIT)
-			if not integer_literal:
-				return ParseError("Error: Index of tuple must be an integer literal.")
+		if try_consume(scanner, T.OP_DOT):
+			integer_literal = parse_token(scanner, T.INT_LIT)
 			return TupleAccessExpression(id_token, integer_literal)
-		elif try_consume(scanner, TokenType.LBRAK):
+		elif try_consume(scanner, T.LBRAK):
 			index_expression = parse_expression(scanner)
-			if not try_consume(scanner, TokenType.RBRAK):
-				return ParseError("Error: Missing ']' to close '['.")
 			return ArrayAccessExpression(id_token, index_expression)
 		else:
-			argument_expression = parse_id_expression(scanner)
-			if not is_error(argument_expression):
-				return FunctionCallExpression(id_token, argument_expression)
-			else:
+			try:
+				argument_expression = parse_parenthesized_expression(scanner)
+				return FunctioncallExpression(id_token, argument_expression)
+			except ParseError:
 				return IdentifierExpression(id_token)
-	elif scanner.peek().type == TokenType.INT_LIT:
+	elif scanner.peek().type == T.INT_LIT:
 		return IntegerLiteralExpression(scanner.next())
 	else:
-		return ParseError("Invalid expression.")
+		return ParseError(expected=set([T.ID, T.INT_LIT]))
 
 source = """
 global a = 1, 2, 3;
@@ -343,7 +360,11 @@ defun main(argA, argB, argC)
 end defun
 """
 s = scanner.Scanner(emit_comments=False, string=source)
-p = parse_input(s)
-print(p)
-print(s.peek())
+try:
+	p = parse_input(s)
+	print(p)
+except ParseError as e:
+	print("Error.")
+	print("Got", s.peek())
+	print("But expected " + " or ".join(str(t) for t in e.expected))
 		
