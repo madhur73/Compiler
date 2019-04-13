@@ -162,7 +162,7 @@ def parse_definition(scanner):
 	def parse_next_id(scanner):
 		parse_token(scanner, T.OP_COMMA)
 		return parse_token(scanner, T.ID)
-	argument_identifiers += [parse_repeating(scanner, parse_next_id, T.RPAR)]
+	argument_identifiers += parse_repeating(scanner, parse_next_id, T.RPAR)
 	
 	# Parse body.
 	def parse_statement_or_declaration(scanner):
@@ -261,7 +261,7 @@ def parse_lhs_list(scanner):
 		parse_token(scanner, T.OP_COMMA)
 		return parse_lhs_item(scanner)
 	items = [parse_lhs_item(scanner)]
-	items += [parse_repeating(scanner, parse_next_lhs_item, None)]
+	items += parse_repeating(scanner, parse_next_lhs_item, None)
 	return items
 
 def parse_lhs_item(scanner):
@@ -312,7 +312,7 @@ def parse_tuple_expression(scanner):
 	def parse_next_tuple_element(scanner):
 		parse_token(scanner, T.OP_COMMA)
 		return parse_addition_expression(scanner)
-	tuple_elements += [parse_repeating(scanner, parse_next_tuple_element, None)]
+	tuple_elements += parse_repeating(scanner, parse_next_tuple_element, None)
 	if len(tuple_elements) == 1:
 		return tuple_elements[0]
 	else:
