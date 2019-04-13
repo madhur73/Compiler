@@ -33,7 +33,7 @@ class Node:
 	def children(self):
 		return (i for i in vars(self).items())
 
-class Input(Node):
+class Program(Node):
 	def __init__(self, parts):
 		self.parts = parts
 

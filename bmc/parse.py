@@ -45,7 +45,7 @@ def parse_repeating(scanner, parser):
 	result = []
 	try:
 		while True:
-			result += [scanner(parser)]
+			result += [parser(scanner)]
 	except ParseError:
 		pass
 	return result
@@ -65,26 +65,17 @@ def parse_token_sequence(scanner, token_types):
 	"""Like parse_token, but parses multiple tokens in sequence, and returns a list of Token objects."""
 	return [parse_token(scanner, t) for t in token_types]
 
-def parse_input(scanner):
-	parts = []
-	while True:
-		part = parse_statement(scanner)
-		if is_error(part):
-			part = parse_declaration(scanner)
-		if is_error(part):
-			part = parse_definition(scanner)
-		if is_error(part):
-			break
-		parts += [part]
-	if scanner.peek().type == TokenType.EOF:
-		return Input(parts)
-	else:
-		return part
+def parse_program(scanner):
+	def parse_statement_or_declaration_or_definition(scanner):
+		return parse_any(scanner, [parse_statement, parse_declaration, parse_definition])
+	parts = parse_repeating(scanner, parse_statement_or_declaration_or_definition)
+	parse_token(scanner, T.EOF)
+	return Program(parts)
 
 def parse_array_declaration(scanner):
 	_, identifier, _ = parse_token_sequence(scanner, [T.KW_ARRAY, T.ID, T.LBRAK])
 	range = parse_range(scanner)
-	parse_token(TokenType.RBRAK)
+	parse_token(T.RBRAK)
 	
 	# Parse optional initialization expression.
 	try:
@@ -124,7 +115,7 @@ def parse_declaration(scanner):
 	])
 
 def parse_definition(scanner):
-	_, identifier, _ = parse_token_sequence(scanner, [T.KW_DEFUN, T.ID, T.LPAR])
+	_, function_identifier, _ = parse_token_sequence(scanner, [T.KW_DEFUN, T.ID, T.LPAR])
 	
 	# Parse argument list.  At least one argument is required.
 	argument_identifiers = [parse_token(scanner, T.ID)]
@@ -228,7 +219,7 @@ def parse_statement_list(scanner):
 
 def parse_lhs_list(scanner):
 	def parse_next_lhs_item(scanner):
-		parse_token(scanner, TokenType.OP_COMMA)
+		parse_token(scanner, T.OP_COMMA)
 		return parse_lhs_item(scanner)
 	items = [parse_lhs_item(scanner)]
 	items += parse_repeating(scanner, parse_next_lhs_item)
@@ -264,12 +255,12 @@ def parse_boolean_expression(scanner):
 		T.OP_LESSEQUAL:    LessThanEqualsExpression,
 		T.OP_GREATEREQUAL: GreaterThanEqualsExpression,
 	}[parse_any(scanner, [
-	    lambda s: parse_token(T.OP_LESS),
-	    lambda s: parse_token(T.OP_GREATER),
-	    lambda s: parse_token(T.OP_EQUAL),
-	    lambda s: parse_token(T.OP_NOTEQUA),
-	    lambda s: parse_token(T.OP_LESSEQUAL),
-	    lambda s: parse_token(T.OP_GREATEREQUAL)
+	    lambda s: parse_token(scanner, T.OP_LESS),
+	    lambda s: parse_token(scanner, T.OP_GREATER),
+	    lambda s: parse_token(scanner, T.OP_EQUAL),
+	    lambda s: parse_token(scanner, T.OP_NOTEQUA),
+	    lambda s: parse_token(scanner, T.OP_LESSEQUAL),
+	    lambda s: parse_token(scanner, T.OP_GREATEREQUAL)
 	]).type]
 	right = parse_expression(scanner)
 	return NodeType(left, right)
@@ -290,8 +281,8 @@ def parse_tuple_expression(scanner):
 
 def parse_addition_expression(scanner):
 	left = parse_multiplication_expression(scanner)
-	while scanner.peek().type in (TokenType.OP_PLUS, TokenType.OP_MINUS):
-		if scanner.next().type == TokenType.OP_PLUS:
+	while scanner.peek().type in (T.OP_PLUS, T.OP_MINUS):
+		if scanner.next().type == T.OP_PLUS:
 			Node = AddExpression
 		else:
 			Node = SubtractExpression
@@ -301,8 +292,8 @@ def parse_addition_expression(scanner):
 
 def parse_multiplication_expression(scanner):
 	left = parse_parenthesized_expression(scanner)
-	while scanner.peek().type in (TokenType.OP_MULT, TokenType.OP_DIV):
-		if scanner.next().type == TokenType.OP_MULT:
+	while scanner.peek().type in (T.OP_MULT, T.OP_DIV):
+		if scanner.next().type == T.OP_MULT:
 			Node = MultiplyExpression
 		else:
 			Node = DivideExpression
@@ -314,7 +305,7 @@ def parse_parenthesized_expression(scanner):
 	try:
 		parse_token(scanner, T.LPAR)
 		parenthesized = True
-	except ParseExpression:
+	except ParseError:
 		parenthesized = False
 	if parenthesized:
 		internal_expression = parse_expression(scanner)
@@ -324,13 +315,16 @@ def parse_parenthesized_expression(scanner):
 	return internal_expression
 		
 def parse_id_expression(scanner):
-	id_token = try_consume(scanner, T.ID)
-	if id_token:
-		if try_consume(scanner, T.OP_DOT):
+	if scanner.peek().type == T.ID:
+		id_token = scanner.next()
+		if scanner.peek().type == T.OP_DOTDOT:
+			scanner.next()
 			integer_literal = parse_token(scanner, T.INT_LIT)
 			return TupleAccessExpression(id_token, integer_literal)
-		elif try_consume(scanner, T.LBRAK):
+		elif scanner.peek().type == T.LBRAK:
+			scanner.next()
 			index_expression = parse_expression(scanner)
+			parse_token(scanner, T.RBRAK)
 			return ArrayAccessExpression(id_token, index_expression)
 		else:
 			try:
@@ -361,10 +355,11 @@ end defun
 """
 s = scanner.Scanner(emit_comments=False, string=source)
 try:
-	p = parse_input(s)
+	p = parse_program(s)
 	print(p)
 except ParseError as e:
 	print("Error.")
 	print("Got", s.peek())
 	print("But expected " + " or ".join(str(t) for t in e.expected))
+	raise e
 		
