@@ -22,6 +22,7 @@ TokenType = enum.Enum("TokenType", """
     KW_ELSIF
     KW_ELSE
     KW_FOREACH
+    KW_FOR
     KW_IN
     OP_DOT
     INT_LIT

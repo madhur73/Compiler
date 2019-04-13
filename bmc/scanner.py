@@ -45,6 +45,7 @@ _keywords = {
     "elsif":   TokenType.KW_ELSIF,
     "end":     TokenType.KW_END,
     "foreach": TokenType.KW_FOREACH,
+    "for":     TokenType.KW_FOR,
     "global":  TokenType.KW_GLOBAL,
     "if":      TokenType.KW_IF,
     "in":      TokenType.KW_IN,
