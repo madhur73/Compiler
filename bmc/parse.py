@@ -374,4 +374,4 @@ def parse_id_expression(scanner):
 	elif scanner.peek().type == T.INT_LIT:
 		return IntegerLiteralExpression(scanner.next())
 	else:
-		return ParseError(expected=set([T.ID, T.INT_LIT]))
+		raise ParseError(expected=set([T.ID, T.INT_LIT]))
