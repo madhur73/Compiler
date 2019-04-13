@@ -36,10 +36,8 @@ def parse_any(scanner, parsers):
 		except ParseError as parse_error:
 			if scanner.peek() == original_next_token:
 				# OK: merely a failure to parse that alternative.
-				print("failure OK")
 				expected |= parse_error.expected
 			else:
-				print(parser.__name__, "failure is actually a failure")
 				# Error: alternative failed mid-way through, after we had
 				# committed to it.
 				raise parse_error
@@ -214,12 +212,10 @@ def parse_if_statement(scanner):
 
 def parse_foreach_statement(scanner):
 	_, identifier, _ = parse_token_sequence(scanner, [T.KW_FOREACH, T.ID, T.KW_IN])
-	print("before")
 	source_range_or_identifier = parse_any(scanner, [
 		parse_range,
 		lambda s: parse_token(s, T.ID)
 	])
-	print("after")
 	parse_token(scanner, T.KW_DO)
 	statements = parse_statement_list(scanner, T.KW_END)
 	parse_token_sequence(scanner, [T.KW_FOR])
