@@ -43,19 +43,32 @@ def parse_any(scanner, parsers):
 				raise parse_error
 	raise ParseError(expected=expected)
 
-def parse_repeating(scanner, parser):
-	"""Implements parsing repetitions, e.g. "A = B*".
+def parse_repeating(scanner, repeating_parser, next_token):
+	"""Implements parsing repetitions, e.g. "A = B*c".
 	
-	parser(scanner) is repeatedly called until it fails.  A list of all the results
-	is returned.  This may result in an empty list.
+	repeating_parser(scanner) is like B in the example above.  It is repeatedly
+	called until it fails.
+	
+	next_token(scanner) is like c in the example above.  If it is not None, a
+	match is attempted after the first failure of repeating_parser.  If that
+	fails, then the result of the parse_repeating() call is a failure.
+	
+	The return value is a list of the repeating_parser results.  The next_token
+	result is discarded (unless it is an error).
 	"""
-	result = []
+	repeating_parser_results = []
 	try:
 		while True:
-			result += [parser(scanner)]
-	except ParseError:
-		pass
-	return result
+			repeating_parser_results += [repeating_parser(scanner)]
+	except ParseError as error:
+		expected = error.expected.copy()
+	try:
+		if next_token is not None:
+			parse_token(scanner, next_token)
+		return repeating_parser_results
+	except ParseError as error: # next_parser failed.
+		expected |= error.expected
+		raise ParseError(expected=expected)
 
 def parse_token(scanner, token_type):
 	"""Parses a token, given a token type that it must match.
@@ -75,8 +88,12 @@ def parse_token_sequence(scanner, token_types):
 def parse_program(scanner):
 	def parse_statement_or_declaration_or_definition(scanner):
 		return parse_any(scanner, [parse_statement, parse_declaration, parse_definition])
-	parts = parse_repeating(scanner, parse_statement_or_declaration_or_definition)
-	parse_token(scanner, T.EOF)
+	def parse_eof(scanner):
+		return parse_token(scanner, T.EOF)
+	
+	parts = []
+	while scanner.peek().type != T.EOF:
+		parts += [parse_statement_or_declaration_or_definition(scanner)]
 	return Program(parts)
 
 def parse_array_declaration(scanner):
@@ -129,15 +146,14 @@ def parse_definition(scanner):
 	def parse_next_id(scanner):
 		parse_token(scanner, T.OP_COMMA)
 		return parse_token(scanner, T.ID)
-	argument_identifiers += parse_repeating(scanner, parse_next_id)
-	parse_token(scanner, T.RPAR)
+	argument_identifiers += [parse_repeating(scanner, parse_next_id, T.RPAR)]
 	
 	# Parse body.
 	def parse_statement_or_declaration(scanner):
 		return parse_any(scanner, [parse_statement, parse_declaration])
-	body = parse_repeating(scanner, parse_statement_or_declaration)
+	body = parse_repeating(scanner, parse_statement_or_declaration, T.KW_END)
 	
-	parse_token_sequence(scanner, [T.KW_END, T.KW_DEFUN])
+	parse_token(scanner, T.KW_DEFUN)
 	
 	return FunctionDefinition(function_identifier, argument_identifiers, body)
 
@@ -161,15 +177,15 @@ def parse_while_statement(scanner):
 	parse_token(scanner, T.KW_WHILE)
 	conditional = parse_boolean_expression(scanner)
 	parse_token(scanner, T.KW_DO)
-	statements = parse_statement_list(scanner)
-	parse_token_sequence(scanner, [T.KW_END, T.KW_WHILE])
+	statements = parse_statement_list(scanner, T.KW_END)
+	parse_token_sequence(scanner, [T.KW_WHILE])
 	return WhileStatement(conditional, statements)
 
 def parse_if_statement(scanner):
 	parse_token(scanner, T.KW_IF)
 	condition = parse_boolean_expression(scanner)
 	parse_token(scanner, T.KW_THEN)
-	statements = parse_statement_list(scanner)
+	statements = parse_statement_list(scanner, None)
 	
 	root_node = IfStatement(condition, statements, [])
 	rightmost_node = root_node
@@ -177,13 +193,13 @@ def parse_if_statement(scanner):
 		scanner.next()
 		elsif_condition = parse_boolean_expression(scanner)
 		parse_token(scanner, T.KW_THEN)
-		elsif_statements = parse_statement_list(scanner)
+		elsif_statements = parse_statement_list(scanner, None)
 		new_node = IfStatement(elsif_conditon, elsif_statements, [])
 		rightmost_node.else_statements = [new_node]
 		rightmost_node = new_node
 	if scanner.peek().type == T.KW_ELSE:
 		scanner.next()
-		rightmost_node.else_statements = parse_statement_list(scanner)
+		rightmost_node.else_statements = parse_statement_list(scanner, None)
 	
 	parse_token_sequence(scanner, [T.KW_END, T.KW_IF])
 	return root_node
@@ -195,8 +211,8 @@ def parse_foreach_statement(scanner):
 		lambda s: parse_token(s, T.ID)
 	])
 	parse_token(scanner, T.KW_DO)
-	statements = parse_statement_list(scanner)
-	parse_token_sequence(scanner, [T.KW_END, T.KW_FOR])
+	statements = parse_statement_list(scanner, T.KW_END)
+	parse_token_sequence(scanner, [T.KW_FOR])
 	return ForeachStatement(identifier, source_range_or_identifier, statements)
 
 def parse_return_statement(scanner):
@@ -221,15 +237,15 @@ def parse_statement(scanner):
 	    parse_print_statement
 	])
 	
-def parse_statement_list(scanner):
-	return parse_repeating(scanner, parse_statement)
+def parse_statement_list(scanner, next_token):
+	return parse_repeating(scanner, parse_statement, next_token)
 
 def parse_lhs_list(scanner):
 	def parse_next_lhs_item(scanner):
 		parse_token(scanner, T.OP_COMMA)
 		return parse_lhs_item(scanner)
 	items = [parse_lhs_item(scanner)]
-	items += parse_repeating(scanner, parse_next_lhs_item)
+	items += [parse_repeating(scanner, parse_next_lhs_item, None)]
 	return items
 
 def parse_lhs_item(scanner):
@@ -280,7 +296,7 @@ def parse_tuple_expression(scanner):
 	def parse_next_tuple_element(scanner):
 		parse_token(scanner, T.OP_COMMA)
 		return parse_addition_expression(scanner)
-	tuple_elements += parse_repeating(scanner, parse_next_tuple_element)
+	tuple_elements += [parse_repeating(scanner, parse_next_tuple_element, None)]
 	if len(tuple_elements) == 1:
 		return tuple_elements[0]
 	else:
