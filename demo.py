@@ -9,5 +9,5 @@ try:
 	print(ast)
 except bmc.parse.ParseError as error:
 	print("Error.")
-	print("Got", s.peek())
-	print("But expected " + " or ".join(str(t) for t in e.expected))
+	print("Got", scanner.peek())
+	print("But expected " + " or ".join(str(t) for t in error.expected))
