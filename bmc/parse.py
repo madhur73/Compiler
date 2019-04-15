@@ -356,7 +356,7 @@ def parse_parenthesized_expression(scanner):
 def parse_id_expression(scanner):
 	if scanner.peek().type == T.ID:
 		id_token = scanner.next()
-		if scanner.peek().type == T.OP_DOTDOT:
+		if scanner.peek().type == T.OP_DOT:
 			scanner.next()
 			integer_literal = parse_token(scanner, T.INT_LIT)
 			return TupleAccessExpression(id_token, integer_literal)
