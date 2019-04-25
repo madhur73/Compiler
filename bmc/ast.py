@@ -14,21 +14,16 @@ class Node:
 		pass
 	
 	def __str__(self):
-		def indented(string):
-			lines = string.split("\n")
-			indented_lines = ("  " + line for line in lines)
-			return "\n".join(indented_lines)
+		def indent(string):
+			return "\n".join("  " + line for line in string.split("\n"))
 		def pretty(value):
-			if isinstance(value, list):
-				return "[\n" + indented("\n".join(str(e) for e in value)) + "\n]"
+			# For non-empty lists, start a new level of indentation and put each element on its own line.
+			if isinstance(value, list) and len(value) > 0:
+				return "[\n" + indent(",\n".join(str(e) for e in value)) + "\n]"
 			else:
 				return str(value)
-		result = type(self).__name__
-		child_strings = [name + " = " + pretty(value) for name, value in self.children()]
-		if child_strings:
-			result += "\n"
-			result += "\n".join(indented(child_string) for child_string in child_strings)
-		return result
+		child_strings = [indent(name + " = " + pretty(value)) for name, value in self.children()]
+		return type(self).__name__ + "(\n" + ",\n".join(child_strings) + "\n)"
 	
 	def children(self):
 		return (i for i in vars(self).items())
