@@ -1,6 +1,32 @@
 from bmc.token import Token
 from typing import List, Union
 
+class ArrayType():
+	pass
+
+class TupleType:
+	def __init__(self, length):
+		self.length = length
+	def __eq__(self, other):
+		return self.length == other.length if type(other) is TupleType else NotImplemented
+
+def is_array_type(object):
+	return isinstance(object, ArrayType)
+
+def is_tuple_type(object):
+	return isinstance(object, TupleType)
+
+class Symbol:
+	def __init__(self, declaration_node, initialization_node, type=None):
+		self.declaration_node = declaration_node
+		self.initialization_node = initialization_node
+		self.type = type
+
+class TypeCheckError(Exception):
+	def __init__(self, message, problem_node):
+		Exception.__init__(self, message)
+		self.problem_node = problem_node
+
 class Node:
 	"""Base class for all abstract syntax tree nodes.
 	
@@ -187,13 +213,22 @@ class FunctionCallExpression(Expression):
 	def __init__(self, identifier_token, argument):
 		self.identifier_token = identifier_token
 		self.argument = argument
-
+	def infer_type(self, scope):
+		if 
+		
 class TupleAccessExpression(Expression):
 	tuple_expression: "Expression"
 	index: Token
 	def __init__(self, tuple_expression, index):
 		self.tuple_expression = tuple_expression
 		self.index = index
+	def infer_type(self, scope):
+		type = infer_type(tuple_expression)
+		if is_tuple_type(type):
+			if int(index.string) <= type.length:
+				return TupleType(1)
+			raise TypeCheckError(f"Invalid tuple index {index.string} for {type.length}-tuple.", self)
+		raise TypeCheckError("Expression is not a tuple.", self.tuple_expression)
 
 class ArrayAccessExpression(Expression):
 	identifier: Token
@@ -201,8 +236,17 @@ class ArrayAccessExpression(Expression):
 	def __init__(self, identifier, index):
 		self.identifier = identifier
 		self.index = index
+	def infer_type(self, scope):
+		if identifier in scope and is_array_type(scope[identifier].type):
+			# Valid array use.
+			return TupleType(1)
+		else:
+			raise TypeCheckError("Identifier does not name an array.", self)
 
 class IntegerLiteralExpression(Expression):
 	token: Token
 	def __init__(self, token):
 		self.token = token
+	def infer_type(self, scope):
+		# For simplicity, integers are treated as 1-tuples.
+		return TupleType(1)
