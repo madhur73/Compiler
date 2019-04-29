@@ -1,3 +1,4 @@
+
 from bmc.ast import *
 from bmc import scanner
 from bmc.token import TokenType as T
@@ -224,7 +225,7 @@ def parse_foreach_statement(scanner):
 	_, identifier, _ = parse_token_sequence(scanner, [T.KW_FOREACH, T.ID, T.KW_IN])
 	source_range_or_identifier = parse_any(scanner, [
 		parse_range,
-		lambda s: parse_token(s, T.ID)
+		lambda s: IdentifierExpression(parse_token(s, T.ID))
 	])
 	parse_token(scanner, T.KW_DO)
 	statements = parse_statement_list(scanner, T.KW_END)
