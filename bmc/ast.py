@@ -1,31 +1,6 @@
 from bmc.token import Token
+from bmc.type_check import *
 from typing import List, Union
-
-class ArrayType():
-	pass
-
-class TupleType:
-	def __init__(self, length):
-		self.length = length
-	def __eq__(self, other):
-		return self.length == other.length if type(other) is TupleType else NotImplemented
-
-def is_array_type(object):
-	return isinstance(object, ArrayType)
-
-def is_tuple_type(object):
-	return isinstance(object, TupleType)
-
-class Symbol:
-	def __init__(self, declaration_node, initialization_node, type=None):
-		self.declaration_node = declaration_node
-		self.initialization_node = initialization_node
-		self.type = type
-
-class TypeCheckError(Exception):
-	def __init__(self, message, problem_node):
-		Exception.__init__(self, message)
-		self.problem_node = problem_node
 
 class Node:
 	"""Base class for all abstract syntax tree nodes.
@@ -174,33 +149,28 @@ class TupleExpression(Expression):
 	def __init__(self, elements):
 		self.elements = elements
 
-class AddExpression(Expression):
+class ArithmeticExpression(Expression):
 	left: "Expression"
 	right: "Expression"
 	def __init__(self, left, right):
 		self.left = left
 		self.right = right
-
-class SubtractExpression(Expression):
-	left: "Expression"
-	right: "Expression"
-	def __init__(self, left, right):
-		self.left = left
-		self.right = right
-
-class MultiplyExpression(Expression):
-	left: "Expression"
-	right: "Expression"
-	def __init__(self, left, right):
-		self.left = left
-		self.right = right
-
-class DivideExpression(Expression):
-	left: "Expression"
-	right: "Expression"
-	def __init__(self, left, right):
-		self.left = left
-		self.right = right
+	def infer_type(self, scope):
+		left_type = infer_type(self.left, scope)
+		if not is_tuple_type(left_type) and left_type.length == 1:
+			raise TypeCheckError("Expected scalar but got a tuple.", self.left)
+		right_type = infer_type(self.right, scope)
+		if not is_tuple_type(right_type) and right_type.length == 1:
+			raise TypeCheckError("Expected scalar but got a tuple.", self.right)
+		return TupleType(1)
+class AddExpression(ArithmeticExpression):
+	pass
+class SubtractExpression(ArithmeticExpression):
+	pass
+class MultiplyExpression(ArithmeticExpression):
+	pass
+class DivideExpression(ArithmeticExpression):
+	pass
 
 class IdentifierExpression(Expression):
 	identifier_token: Token
@@ -214,7 +184,7 @@ class FunctionCallExpression(Expression):
 		self.identifier_token = identifier_token
 		self.argument = argument
 	def infer_type(self, scope):
-		if 
+		raise NotImplementedError("Function call type inference not yet implemented.")
 		
 class TupleAccessExpression(Expression):
 	tuple_expression: "Expression"
