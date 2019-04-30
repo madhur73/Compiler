@@ -8,7 +8,6 @@ def parse_report_errors(scanner):
 	try:
 		ast = parse_program(scanner)
 		print("Success!")
-		print(ast)
 		return ast
 	except ParseError as error:
 		print("Error.")
@@ -145,8 +144,11 @@ def parse_non_array_declaration(scanner):
 		T.KW_GLOBAL: GlobalDeclaration
 	}[parse_any(scanner, [parse_local, parse_global]).type]
 	
-	identifier, _ = parse_token_sequence(scanner, [T.ID, T.ASSIGN])
-	expression = parse_expression(scanner)
+	identifier = parse_token(scanner, T.ID)
+	expression = None
+	if scanner.peek().type == T.ASSIGN:
+		scanner.next()
+		expression = parse_expression(scanner)
 	parse_token(scanner, T.SEMI)
 	return NodeType(identifier, expression)
 

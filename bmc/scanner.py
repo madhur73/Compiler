@@ -128,7 +128,7 @@ class Scanner:
             self._skip_whitespace()
             
             if self._b >= len(self._s):
-                return Token(TokenType.EOF, "", self._b, self._b, self._line, self._column)
+                return Token(TokenType.EOF, "", self._b, self._b, self._line, self._column, self._s)
             
             token_type, raw_value = _next_token(self._s, self._b)
             
@@ -145,7 +145,7 @@ class Scanner:
                 self._warn('integer "{}" will be clamped to 2^31-1.'.format(raw_value), len(raw_value))
                 value = str(2**31 - 1)
             
-            token = Token(token_type, value, self._b, self._b+len(raw_value), self._line, self._column)
+            token = Token(token_type, value, self._b, self._b+len(raw_value), self._line, self._column, self._s)
             self._advance_b(len(raw_value))
             
             if token_type == TokenType.COMMENT and not self._emit_comments:

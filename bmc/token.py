@@ -55,13 +55,14 @@ class Token:
     - line and column are the human-readable (1-based) coordinates of begin.
     """
     
-    def __init__(self, type, string, begin, end, line, column):
+    def __init__(self, type, string, begin, end, line, column, full_source):
         self.type = type
         self.string = string
         self.begin = begin
         self.end = end
         self.line = line
         self.column = column
+        self.full_source = full_source
     
     def __str__(self):
         return '{}:{} ({}-{}) {} "{}"'.format(self.line, self.column, self.begin, self.end, self.type, self.string)

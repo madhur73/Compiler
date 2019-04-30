@@ -1,6 +1,7 @@
 from bmc.token import Token
 from bmc.type_check import *
 from typing import List, Union
+from functools import reduce
 
 class Node:
 	"""Base class for all abstract syntax tree nodes.
@@ -29,11 +30,42 @@ class Node:
 	
 	def children(self):
 		return (i for i in vars(self).items())
+	
+	def all_tokens(self):
+		def tokens_of(child):
+			if isinstance(child, Token):
+				return [child]
+			elif isinstance(child, Node):
+				return child.all_tokens()
+			elif isinstance(child, list):
+				return sum([tokens_of(e) for e in child], [])
+		# Flat list of child tokens.
+		child_tokens = sum([tokens_of(child) for _, child in self.children()], [])
+		return child_tokens
+	
+	def source(self):
+		def merge(range1, range2):
+			return min(range1[0], range2[0]), max(range1[1], range2[1])
+		all_tokens = self.all_tokens()
+		ranges = [(token.begin, token.end) for token in all_tokens]
+		overall_range = reduce(merge, ranges)
+		source = all_tokens[0].full_source[overall_range[0]:overall_range[1]]
+		return source
 
 class Program(Node):
 	parts: List[Union["Statement", "FunctionDefinition", "Declaration"]]
 	def __init__(self, parts):
 		self.parts = parts
+	def type_check(self):
+		scope = Scope()
+		for part in self.parts:
+			try:
+				part.type_check(scope)
+			except TypeCheckError as error:
+				print(error)
+		for symbol in scope:
+			if scope[symbol].type is None:
+				print(TypeCheckError("Symbol was never defined.", symbol.declaration_node))
 
 class Declaration(Node):
 	pass
@@ -48,6 +80,14 @@ class ArrayDeclaration(Declaration):
 		self.range = range
 		self.index_identifier = index_identifier
 		self.index_expression = index_expression
+	def type_check(self, scope):
+		if self.identifier not in scope:
+			raise TypeCheckError("Array must be declared with \"global\" or \"local\" before it is initialized as an array.", self)
+		elif scope[self.identifier].initialization_node is not None:
+			raise TypeCheckError("Array has already been initialized.", self)
+		else:
+			scope[self.identifier].initialization_node = self
+			scope[self.identifier].type = ArrayType()
 
 class NonArrayDeclaration(Declaration):
 	identifier: Token
@@ -55,8 +95,19 @@ class NonArrayDeclaration(Declaration):
 	def __init__(self, identifier, expression):
 		self.identifier = identifier
 		self.expression = expression
-class LocalDeclaration(NonArrayDeclaration): pass
-class GlobalDeclaration(NonArrayDeclaration): pass
+class LocalDeclaration(NonArrayDeclaration):
+	def type_check(self, scope):
+		if scope.is_top_level():
+			raise TypeCheckError("Only global variables can be declared in the global scope.", self)
+class GlobalDeclaration(NonArrayDeclaration):
+	def type_check(self, scope):
+		if self.identifier in scope:
+			raise TypeCheckError("Redeclaration of variable.", self)
+		elif not scope.is_top_level() and expression is not None:
+			raise TypeCheckError("Global variables cannot be initialized from a function.", self)
+		else:
+			new_global_type = None if self.expression is None else self.expression.infer_type(scope)
+			scope[self.identifier] = Symbol(self, self.expression, new_global_type)
 
 class FunctionDefinition(Node):
 	function_identifier: Token
@@ -65,6 +116,8 @@ class FunctionDefinition(Node):
 		self.function_identifier = function_identifier
 		self.argument_identifiers = argument_identifiers
 		self.body = body
+	def type_check(self, scope):
+		pass
 
 class Statement(Node):
 	pass
@@ -75,6 +128,15 @@ class AssignmentStatement(Statement):
 	def __init__(self, left, right):
 		self.left = left
 		self.right = right
+	def type_check(self, scope):
+		left_types = [e.infer_type(scope) for e in self.left]
+		for type, expression in zip(left_types, self.left):
+			if not is_tuple_type(type):
+				raise TypeCheckError("Element in left hand side of assignment statement must be assignable.", expression)
+		right_type = self.right.infer_type(scope)
+		effective_left_length = sum(e.length for e in left_types)
+		if effective_left_length != right_type.length:
+			raise TypeCheckError(f"Length mismatch between left ({effective_left_length}) and right ({right_type.length}) of assignment statement.", self)
 
 class ExchangeStatement(Statement):
 	left: List[Union["IdentifierExpression", "TupleAccessExpression", "ArrayAccessExpression"]]
@@ -82,6 +144,8 @@ class ExchangeStatement(Statement):
 	def __init__(self, left, right):
 		self.left = left
 		self.right = right
+	def type_check(self, scope):
+		pass
 
 class WhileStatement(Statement):
 	condition: "BooleanExpression"
@@ -89,6 +153,8 @@ class WhileStatement(Statement):
 	def __init__(self, condition, statements):
 		self.condition = condition
 		self.statements = statements
+	def type_check(self, scope):
+		pass
 
 class IfStatement(Statement):
 	condition: "BooleanExpression"
@@ -98,6 +164,8 @@ class IfStatement(Statement):
 		self.condition = condition
 		self.statements = statements
 		self.else_statements = else_statements
+	def type_check(self, scope):
+		pass
 
 class ForeachStatement(Statement):
 	element_identifier: Token
@@ -107,16 +175,22 @@ class ForeachStatement(Statement):
 		self.element_identifier = element_identifier
 		self.sequence = sequence
 		self.statements = statements
+	def type_check(self, scope):
+		pass
 
 class ReturnStatement(Statement):
 	expression: "Expression"
 	def __init__(self, expression):
 		self.expression = expression
+	def type_check(self, scope):
+		pass
 
 class PrintStatement(Statement):
 	expression: "Expression"
 	def __init__(self, expression):
 		self.expression = expression
+	def type_check(self, scope):
+		pass
 
 # array-id omitted as a node type because it's syntactically identical to an ID.
 
@@ -126,6 +200,8 @@ class Range(Node):
 	def __init__(self, begin_expression, end_expression):
 		self.begin_expression = begin_expression
 		self.end_expression = end_expression
+	def type_check(self, scope):
+		pass
 
 class BooleanExpression(Node):
 	left: "Expression"
@@ -133,6 +209,8 @@ class BooleanExpression(Node):
 	def __init__(self, left, right):
 		self.left = left
 		self.right = right
+	def type_check(self, scope):
+		pass
 class LessThanExpression(BooleanExpression): pass
 class LessThanEqualsExpression(BooleanExpression): pass
 class GreaterThanExpression(BooleanExpression): pass
@@ -193,7 +271,8 @@ class FunctionCallExpression(Expression):
 		self.identifier_token = identifier_token
 		self.argument = argument
 	def infer_type(self, scope):
-		raise NotImplementedError("Function call type inference not yet implemented.")
+		return TupleType(1)
+		# To do: Properly infer the return type here.
 		
 class TupleAccessExpression(Expression):
 	tuple_expression: "Expression"

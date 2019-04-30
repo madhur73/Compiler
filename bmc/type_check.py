@@ -7,6 +7,7 @@ type of an expression, is in ast.py as methods on the AST node classes.
 from bmc import ast
 from bmc.token import Token, TokenType
 import collections
+from functools import reduce
 
 class Scope(collections.abc.MutableMapping):
 	"""Represents, at some point in the program, the list of visible symbols.
@@ -37,6 +38,11 @@ class Scope(collections.abc.MutableMapping):
 		return iter(self.namespace)
 	def __len__(self):
 		return len(self.namespace)
+	def __contains__(self, key):
+		return self._adjust_key(key) in self.namespace
+	def is_top_level(self):
+		"""Whether or not this scope refers to the top-level global scope."""
+		return True # Functions not yet supported.
 
 class Symbol:
 	def __init__(self, declaration_node, initialization_node, type=None):
@@ -74,26 +80,9 @@ class TypeCheckError(Exception):
 	"""
 	def __init__(self, message, problem_node):
 		Exception.__init__(self, message)
+		self.message = message
 		self.problem_node = problem_node
-
-def check_top_level_declaration(declaration_node, scope):
-	if declaration_node.identifier.string in scope:
-		raise TypeCheckError("Redeclaration of global variable.", declaration_node)
-	elif isinstance(declaration_node, ast.LocalDeclaration):
-		raise TypeCheckError("Local declarations cannot appear at the top level.", declaration_node)
-	elif isinstance(declaration_node, ast.ArrayDeclaration):
-		scope[declaration_node.identifier.string] = Symbol(declaration_node, None, ArrayType())
-		print("Declared global array", declaration_node.identifier)
-	elif isinstance(declaration_node, ast.GlobalDeclaration):
-		type = None
-		initialization_node = None
-		if declaration_node.expression is not None:
-			type = infer_type(declaration_node.expression, scope)
-			initialization_node = declaration_node
-		scope[declaration_node.identifier.string] = Symbol(declaration_node, initialization_node, type)
-
-def type_check(program_node):
-	global_scope = {}
-	for global_statement in program_node.parts:
-		if isinstance(global_statement, ast.Declaration):
-			check_top_level_declaration(global_statement)
+	
+	def __str__(self):
+		return f"{self.message}\n{self.problem_node.all_tokens()[0].line}: {self.problem_node.source()}"
+		
