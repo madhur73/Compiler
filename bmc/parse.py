@@ -9,6 +9,7 @@ def parse_report_errors(scanner):
 		ast = parse_program(scanner)
 		print("Success!")
 		print(ast)
+		return ast
 	except ParseError as error:
 		print("Error.")
 		print("Got", scanner.peek())

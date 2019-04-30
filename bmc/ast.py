@@ -148,6 +148,13 @@ class TupleExpression(Expression):
 	elements: List["Expression"]
 	def __init__(self, elements):
 		self.elements = elements
+	def infer_type(self, scope):
+		subexpression_types = [s.infer_type(scope) for s in self.elements]
+		for type, subexpression in zip(subexpression_types, self.elements):
+			if not is_tuple_type(type):
+				raise TypeCheckError("Tuple can only be constructed from other tuples or scalars.", subexpression)
+		flattened_length = sum(type.length for type in subexpression_types)
+		return TupleType(flattened_length)
 
 class ArithmeticExpression(Expression):
 	left: "Expression"
@@ -176,6 +183,8 @@ class IdentifierExpression(Expression):
 	identifier_token: Token
 	def __init__(self, identifier_token):
 		self.identifier_token = identifier_token
+	def infer_type(self, scope):
+		return scope[self.identifier_token].type
 
 class FunctionCallExpression(Expression):
 	identifier_token: Token
