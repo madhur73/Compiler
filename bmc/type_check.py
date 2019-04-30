@@ -84,5 +84,9 @@ class TypeCheckError(Exception):
 		self.problem_node = problem_node
 	
 	def __str__(self):
-		return f"{self.message}\n{self.problem_node.all_tokens()[0].line}: {self.problem_node.source()}"
+		if isinstance(self.problem_node, Token):
+			source = str(self.problem_node)
+		else:
+			source = self.problem_node.all_tokens()[0].line + ": " + self.problem_node.source()
+		return source + "\n" + self.message
 		
