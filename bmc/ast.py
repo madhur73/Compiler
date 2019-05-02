@@ -112,6 +112,7 @@ class GlobalDeclaration(NonArrayDeclaration):
 class FunctionDefinition(Node):
 	function_identifier: Token
 	argument_identifiers: List[Token]
+	body: List[Union["Statement", "Declaration"]]
 	def __init__(self, function_identifier, argument_identifiers, body):
 		self.function_identifier = function_identifier
 		self.argument_identifiers = argument_identifiers
