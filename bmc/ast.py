@@ -1,137 +1,148 @@
 from bmc.token import Token
-from typing import List, Union
+from typing import List, Union, Optional, get_type_hints
 
 class Node:
-	"""Base class for all abstract syntax tree nodes.
+	"""Base class for all abstract syntax tree nodes."""
 	
-	Defines common code for testing equality and for pretty-printing through str().
-	"""
-	def __eq__(self, other):
-		"""Returns whether or not the two trees have the same structure.
-		
-		For nodes holding tokens, only the type and string value of the tokens
-		need to be equal; the source location is ignored.
-		"""
-		pass
-	
-	def __str__(self):
+	def __repr__(self):
 		def indent(string):
 			return "\n".join("  " + line for line in string.split("\n"))
 		def pretty(value):
 			# For non-empty lists, start a new level of indentation and put each element on its own line.
 			if isinstance(value, list) and len(value) > 0:
-				return "[\n" + indent(",\n".join(str(e) for e in value)) + "\n]"
+				return "[\n" + indent(",\n".join(repr(e) for e in value)) + "\n]"
 			else:
-				return str(value)
+				return repr(value)
 		child_strings = [indent(name + " = " + pretty(value)) for name, value in self.children()]
 		return type(self).__name__ + "(\n" + ",\n".join(child_strings) + "\n)"
 	
 	def children(self):
-		return (i for i in vars(self).items())
+		return [i for i in vars(self).items()]
+	
+	# Auto-generates the node class's __init__().
+	def __init_subclass__(subclass):
+		child_names = _type_annotation_names(subclass)
+		def __init__(self, *, location_begin=None, location_end=None, **kwargs):
+			self.location_begin = location_begin
+			self.location_end = location_end
+			for name in child_names:
+				setattr(self, name, kwargs.pop(name))
+			if kwargs:
+				raise TypeError("Unrecognized arguments in Node initialization: " + str(kwargs))
+		subclass.__init__ = __init__
+	
+	def __eq__(self, other):
+		if type(self) != type(other):
+			return NotImplemented
+		return self.children() == other.children()
+		
+
+def _type_annotation_names(cls):
+	annotations = dict()
+	for c in reversed(cls.mro()):
+		annotations.update(getattr(c, "__annotations__", {}))
+	return annotations.keys()
+ 
+# Descendents of Node are given an auto-generated __init__().  The node's children
+# are passed in as keyword-only arguments; the names of these arguments are
+# specified by type annotations.  Additionally, the __init__() accepts optional
+# location_begin and location_end arguments, representing the [begin, end) source
+# file offsets of the node.
+
+
+# Root node:
 
 class Program(Node):
 	parts: List[Union["Statement", "FunctionDefinition", "Declaration"]]
-	def __init__(self, parts):
-		self.parts = parts
 
-class Declaration(Node):
+
+# Declarations:
+
+class Declaration(Node): # Abstract base class.
 	pass
 
+# array a[0..9] = i=i*2
 class ArrayDeclaration(Declaration):
 	identifier: Token
 	range: "Range"
-	index_identifier: Token
-	index_expression: "Expression"
-	def __init__(self, identifier, range, index_identifier, index_expression):
-		self.identifier = identifier
-		self.range = range
-		self.index_identifier = index_identifier
-		self.index_expression = index_expression
+	index_identifier: Optional[Token]
+	index_expression: Optional["Expression"]
 
-class NonArrayDeclaration(Declaration):
+# local x = 1
+class LocalDeclaration(Declaration):
 	identifier: Token
-	expression: "Expression"
-	def __init__(self, identifier, expression):
-		self.identifier = identifier
-		self.expression = expression
-class LocalDeclaration(NonArrayDeclaration): pass
-class GlobalDeclaration(NonArrayDeclaration): pass
+	expression: Optional["Expression"]
 
+# global x = 1
+class GlobalDeclaration(Declaration):
+	identifier: Token
+	expression: Optional["Expression"]
+
+# Definitions:
+
+# defun f(a, b, c) ... end defun
 class FunctionDefinition(Node):
 	function_identifier: Token
 	argument_identifiers: List[Token]
-	def __init__(self, function_identifier, argument_identifiers, body):
-		self.function_identifier = function_identifier
-		self.argument_identifiers = argument_identifiers
-		self.body = body
+	body: List[Union["Declaration", "Statement"]]
 
-class Statement(Node):
+
+# Statements:
+
+class Statement(Node): # Abstract base class.
 	pass
 
+# a, t.1, a[1]
+class LHS(Node):
+	elements: List[Union["IdentifierExpression", "TupleAccessExpression", "ArrayAccessExpression"]]
+
+# a = b
 class AssignmentStatement(Statement):
-	left: List[Union["IdentifierExpression", "TupleAccessExpression", "ArrayAccessExpression"]]
+	left: "LHS"
 	right: "Expression"
-	def __init__(self, left, right):
-		self.left = left
-		self.right = right
 
+# a <-> b
 class ExchangeStatement(Statement):
-	left: List[Union["IdentifierExpression", "TupleAccessExpression", "ArrayAccessExpression"]]
-	right: List[Union["IdentifierExpression", "TupleAccessExpression", "ArrayAccessExpression"]]
-	def __init__(self, left, right):
-		self.left = left
-		self.right = right
+	left: "LHS"
+	right: "LHS"
 
+# while a == b do ... end while
 class WhileStatement(Statement):
 	condition: "BooleanExpression"
-	statements: List["Statement"]
-	def __init__(self, condition, statements):
-		self.condition = condition
-		self.statements = statements
+	body: List["Statement"]
 
+# if a == b then ... end if
 class IfStatement(Statement):
 	condition: "BooleanExpression"
-	statements: List["Statement"]
-	else_statements: List["Statement"]
-	def __init__(self, condition, statements, else_statements):
-		self.condition = condition
-		self.statements = statements
-		self.else_statements = else_statements
+	body: List["Statement"]
+	else_body: List["Statement"]
 
+# foreach i in s do ... end for
 class ForeachStatement(Statement):
 	element_identifier: Token
-	sequence: Union["IdentifierExpression", "Range"]
-	statements: List["Statement"]
-	def __init__(self, element_identifier, sequence, statements):
-		self.element_identifier = element_identifier
-		self.sequence = sequence
-		self.statements = statements
+	source_sequence: Union["IdentifierExpression", "Range"]
+	body: List["Statement"]
 
+# return x
 class ReturnStatement(Statement):
 	expression: "Expression"
-	def __init__(self, expression):
-		self.expression = expression
 
+# print x
 class PrintStatement(Statement):
 	expression: "Expression"
-	def __init__(self, expression):
-		self.expression = expression
 
-# array-id omitted as a node type because it's syntactically identical to an ID.
 
+# Expressions:
+
+# a..b
 class Range(Node):
 	begin_expression: "Expression"
 	end_expression: "Expression"
-	def __init__(self, begin_expression, end_expression):
-		self.begin_expression = begin_expression
-		self.end_expression = end_expression
 
+# a < b, a == b, etc.
 class BooleanExpression(Node):
 	left: "Expression"
 	right: "Expression"
-	def __init__(self, left, right):
-		self.left = left
-		self.right = right
 class LessThanExpression(BooleanExpression): pass
 class LessThanEqualsExpression(BooleanExpression): pass
 class GreaterThanExpression(BooleanExpression): pass
@@ -139,70 +150,41 @@ class GreaterThanEqualsExpression(BooleanExpression): pass
 class EqualsExpression(BooleanExpression): pass
 class NotEqualsExpression(BooleanExpression): pass
 
-class Expression(Node):
-	"""Base class for all kinds of expressions."""
+class Expression(Node): # Abstract base class.
 	pass
 
+# a, b, c
 class TupleExpression(Expression):
 	elements: List["Expression"]
-	def __init__(self, elements):
-		self.elements = elements
 
-class AddExpression(Expression):
+# a+b, a-b, a*b, a/b
+class ArithmeticExpression(Expression):
 	left: "Expression"
 	right: "Expression"
-	def __init__(self, left, right):
-		self.left = left
-		self.right = right
+class AddExpression(ArithmeticExpression): pass
+class SubtractExpression(ArithmeticExpression): pass
+class MultiplyExpression(ArithmeticExpression): pass
+class DivideExpression(ArithmeticExpression): pass
 
-class SubtractExpression(Expression):
-	left: "Expression"
-	right: "Expression"
-	def __init__(self, left, right):
-		self.left = left
-		self.right = right
-
-class MultiplyExpression(Expression):
-	left: "Expression"
-	right: "Expression"
-	def __init__(self, left, right):
-		self.left = left
-		self.right = right
-
-class DivideExpression(Expression):
-	left: "Expression"
-	right: "Expression"
-	def __init__(self, left, right):
-		self.left = left
-		self.right = right
-
+# a
 class IdentifierExpression(Expression):
-	identifier_token: Token
-	def __init__(self, identifier_token):
-		self.identifier_token = identifier_token
+	token: Token
 
+# f x
 class FunctionCallExpression(Expression):
 	identifier_token: Token
 	argument: "Expression"
-	def __init__(self, identifier_token, argument):
-		self.identifier_token = identifier_token
-		self.argument = argument
 
+# t.1
 class TupleAccessExpression(Expression):
-	tuple_expression: "Expression"
+	identifier_token: Token
 	index: Token
-	def __init__(self, tuple_expression, index):
-		self.tuple_expression = tuple_expression
-		self.index = index
 
+# a[i]
 class ArrayAccessExpression(Expression):
-	identifier: Token
+	identifier_token: Token
 	index: "Expression"
-	def __init__(self, identifier, index):
-		self.identifier = identifier
-		self.index = index
 
+# 123
 class IntegerLiteralExpression(Expression):
 	token: Token
-	def __init__(self, token):
-		self.token = token
