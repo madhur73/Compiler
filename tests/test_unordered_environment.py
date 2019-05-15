@@ -38,3 +38,9 @@ def test_unordered_only_in_with_statement():
     e = ue.UnorderedEnvironment(create_placeholder, assign)
     with pytest.raises(AttributeError):
         x = [e.x]
+
+def test_reassignments_forbidden():
+    with pytest.raises(NameError):
+        with ue.UnorderedEnvironment(create_placeholder, assign) as e:
+            e.x = [1]
+            e.x = [2]
