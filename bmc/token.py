@@ -66,6 +66,9 @@ class Token:
     def __str__(self):
         return '{}:{} ({}-{}) {} "{}"'.format(self.line, self.column, self.begin, self.end, self.type, self.string)
     
+    def __repr__(self):
+        return f"Token({self.type!r}, {self.string!r}, {self.begin}, {self.end}, {self.line}, {self.column})"
+    
     def __eq__(self, other):
         if isinstance(other, Token):
             return (self.type, self.string, self.begin, self.end, self.line, self.column) \
