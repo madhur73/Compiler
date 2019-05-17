@@ -31,5 +31,31 @@ def test_assignment_statement():
         ])
     )
     check_ast("a, b.1, c[2] = 0, 1, 2;", expected)
-                
-            
+
+def test_foreach_statement():
+    expected = ast.ForeachStatement(
+        element_identifier = id_token("i"),
+        source_sequence = ast.Range(
+            begin_expression = ast.IntegerLiteralExpression(token=int_token("1")),
+            end_expression = ast.IntegerLiteralExpression(token=int_token("10"))
+        ),
+        body = [
+            ast.PrintStatement(
+                expression = ast.IdentifierExpression(token=id_token("i"))
+            )
+        ]
+    )
+    check_ast("foreach i in 1..10 do print i; end for", expected)
+    
+    expected = ast.ForeachStatement(
+        element_identifier = id_token("e"),
+        source_sequence = ast.IdentifierExpression(token=id_token("a")),
+        body = [
+            ast.PrintStatement(
+                expression = ast.IdentifierExpression(token=id_token("e"))
+            )
+        ]
+    )
+    
+    check_ast("foreach e in a do print e; end for", expected)
+
