@@ -76,7 +76,7 @@ def _next_token(source, begin):
         return None, ""
 
 class Scanner:
-    def __init__(self, *, string="", filepath=None, file=None, emit_comments=True):
+    def __init__(self, *, string="", filepath=None, file=None, emit_comments=False):
         """Initializes a Scanner.
         
         The full source must be provided as either a single string, a file, or a path to a file.
