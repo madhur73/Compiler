@@ -11,10 +11,6 @@ def test_init_rejects_extra_arguments():
     with pytest.raises(TypeError):
         n = ast.EqualsExpression(left="a", right="b", extra="c")
 
-def test_init_accepts_optional_location():
-    n = ast.EqualsExpression(left="a", right="b", location_begin=0, location_end=1)
-    assert (n.location_begin, n.location_end) == (0, 1)
-
 def test_equality():
     x_lt_y_1 = ast.LessThanExpression(left="x", right="y")
     x_lt_y_2 = ast.LessThanExpression(left="x", right="y")

@@ -33,9 +33,7 @@ class Node:
     # Auto-generates the node class's __init__().
     def __init_subclass__(subclass):
         child_names = _type_annotation_names(subclass)
-        def __init__(self, *, location_begin=None, location_end=None, **kwargs):
-            self.location_begin = location_begin
-            self.location_end = location_end
+        def __init__(self, **kwargs):
             for name in child_names:
                 setattr(self, name, kwargs.pop(name))
             if kwargs:
@@ -70,8 +68,6 @@ def strip_locations(root_element):
             element.line = None
             element.column = None
         elif isinstance(element, Node):
-            element.location_begin = None
-            element.location_end = None
             for child_name, child in element.children():
                 recursively_strip_in_place(child)
     root_element_copy = copy.deepcopy(root_element)
@@ -156,7 +152,7 @@ class IfStatement(Statement):
 # foreach i in s do ... end for
 class ForeachStatement(Statement):
     element_identifier: Token
-    source_sequence: Union["IdentifierExpression", "Range"]
+    source_sequence: Union["Expression", "Range"]
     body: List["Statement"]
 
 # return x
