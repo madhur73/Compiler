@@ -76,7 +76,7 @@ def _next_token(source, begin):
         return None, ""
 
 class Scanner:
-    def __init__(self, *, string="", filepath=None, file=None, emit_comments=True):
+    def __init__(self, *, string="", filepath=None, file=None, emit_comments=False):
         """Initializes a Scanner.
         
         The full source must be provided as either a single string, a file, or a path to a file.
@@ -160,6 +160,12 @@ class Scanner:
         next = self.next()
         self._b, self._line, self._column = b, line, column
         return next
+    
+    def rollback(next_token):
+        """Returns the scanner to a state where scanner.peek() == next_token."""
+        self._b = next_token.begin
+        self._line = next_token.line
+        self._column = next_token.column
     
     def __iter__(self):
         return self
