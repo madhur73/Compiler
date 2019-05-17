@@ -111,7 +111,7 @@ def parse_program(scanner):
 	parts = []
 	while scanner.peek().type != T.EOF:
 		parts += [parse_statement_or_declaration_or_definition(scanner)]
-	return Program(parts)
+	return Program(parts=parts)
 
 def parse_array_declaration(scanner):
 	_, identifier, _ = parse_token_sequence(scanner, [T.KW_ARRAY, T.ID, T.LBRAK])
@@ -132,7 +132,7 @@ def parse_array_declaration(scanner):
 	
 	parse_token(scanner, T.SEMI)
 	
-	return ArrayDeclaration(identifier, range, index_identifier, index_expression)
+	return ArrayDeclaration(identifier=identifier, range=range, index_identifier=index_identifier, index_expression=index_expression)
 
 def parse_non_array_declaration(scanner):
 	def parse_local(scanner):
@@ -147,7 +147,7 @@ def parse_non_array_declaration(scanner):
 	identifier, _ = parse_token_sequence(scanner, [T.ID, T.ASSIGN])
 	expression = parse_expression(scanner)
 	parse_token(scanner, T.SEMI)
-	return NodeType(identifier, expression)
+	return NodeType(identifier=identifier, expression=expression)
 
 def parse_declaration(scanner):
 	return parse_any(scanner, [
@@ -172,7 +172,7 @@ def parse_definition(scanner):
 	
 	parse_token(scanner, T.KW_DEFUN)
 	
-	return FunctionDefinition(function_identifier, argument_identifiers, body)
+	return FunctionDefinition(function_identifier=function_identifier, argument_identifiers=argument_identifiers, body=body)
 
 def parse_assign_or_exchange_statement(scanner):
 	lhs_list = parse_lhs_list(scanner)
@@ -188,7 +188,7 @@ def parse_assign_or_exchange_statement(scanner):
 	else:
 		rhs = parse_lhs_list(scanner)
 	parse_token(scanner, T.SEMI)
-	return NodeType(lhs_list, rhs)
+	return NodeType(left=lhs_list, right=rhs)
 
 def parse_while_statement(scanner):
 	parse_token(scanner, T.KW_WHILE)
@@ -196,7 +196,7 @@ def parse_while_statement(scanner):
 	parse_token(scanner, T.KW_DO)
 	statements = parse_statement_list(scanner, T.KW_END)
 	parse_token_sequence(scanner, [T.KW_WHILE])
-	return WhileStatement(conditional, statements)
+	return WhileStatement(condition=conditional, body=statements)
 
 def parse_if_statement(scanner):
 	parse_token(scanner, T.KW_IF)
@@ -204,14 +204,14 @@ def parse_if_statement(scanner):
 	parse_token(scanner, T.KW_THEN)
 	statements = parse_statement_list(scanner, None)
 	
-	root_node = IfStatement(condition, statements, [])
+	root_node = IfStatement(condition=condition, body=statements, else_body=[])
 	rightmost_node = root_node
 	while scanner.peek().type == T.KW_ELSIF:
 		scanner.next()
 		elsif_condition = parse_boolean_expression(scanner)
 		parse_token(scanner, T.KW_THEN)
 		elsif_statements = parse_statement_list(scanner, None)
-		new_node = IfStatement(elsif_condition, elsif_statements, [])
+		new_node = IfStatement(condition=elsif_condition, body=elsif_statements, else_body=[])
 		rightmost_node.else_statements = [new_node]
 		rightmost_node = new_node
 	if scanner.peek().type == T.KW_ELSE:
@@ -230,19 +230,19 @@ def parse_foreach_statement(scanner):
 	parse_token(scanner, T.KW_DO)
 	statements = parse_statement_list(scanner, T.KW_END)
 	parse_token_sequence(scanner, [T.KW_FOR])
-	return ForeachStatement(identifier, source_range_or_identifier, statements)
+	return ForeachStatement(element_identifier=identifier, source_sequence=source_range_or_identifier, body=statements)
 
 def parse_return_statement(scanner):
 	parse_token(scanner, T.RETURN)
 	expression = parse_expression(scanner)
 	parse_token(scanner, T.SEMI)
-	return ReturnStatement(expression)
+	return ReturnStatement(expression=expression)
 	
 def parse_print_statement(scanner):
 	parse_token(scanner, T.PRINT)
 	expression = parse_expression(scanner)
 	parse_token(scanner, T.SEMI)
-	return PrintStatement(expression)
+	return PrintStatement(expression=expression)
 
 def parse_statement(scanner):
 	return parse_any(scanner, [
@@ -263,27 +263,27 @@ def parse_lhs_list(scanner):
 		return parse_lhs_item(scanner)
 	items = [parse_lhs_item(scanner)]
 	items += parse_repeating(scanner, parse_next_lhs_item, None)
-	return items
+	return LHS(elements=items)
 
 def parse_lhs_item(scanner):
 	id_token = parse_token(scanner, T.ID)
 	if scanner.peek().type == T.OP_DOT:
 		scanner.next()
 		integer_literal = parse_token(scanner, T.INT_LIT)
-		return TupleAccessExpression(id_token, integer_literal)
+		return TupleAccessExpression(identifier_token=id_token, index=integer_literal)
 	elif scanner.peek().type == T.LBRAK:
 		scanner.next()
 		index_expression = parse_expression(scanner)
 		parse_token(scanner, T.RBRAK)
-		return ArrayAccessExpression(id_token, index_expression)
+		return ArrayAccessExpression(identifier_token=id_token, index=index_expression)
 	else:
-		return IdentifierExpression(id_token)
+		return IdentifierExpression(token=id_token)
 	
 def parse_range(scanner):
 	begin_expression = parse_expression(scanner)
 	parse_token(scanner, T.OP_DOTDOT)
 	end_expression = parse_expression(scanner)
-	return Range(begin_expression, end_expression)
+	return Range(begin_expression=begin_expression, end_expression=end_expression)
 
 def parse_boolean_expression(scanner):
 	left = parse_expression(scanner)
@@ -303,7 +303,7 @@ def parse_boolean_expression(scanner):
 	    lambda s: parse_token(scanner, T.OP_GREATEREQUAL)
 	]).type]
 	right = parse_expression(scanner)
-	return NodeType(left, right)
+	return NodeType(left=left, right=right)
 
 def parse_expression(scanner):
 	return parse_tuple_expression(scanner)
@@ -317,7 +317,7 @@ def parse_tuple_expression(scanner):
 	if len(tuple_elements) == 1:
 		return tuple_elements[0]
 	else:
-		return TupleExpression(tuple_elements)
+		return TupleExpression(elements=tuple_elements)
 
 def parse_addition_expression(scanner):
 	left = parse_multiplication_expression(scanner)
@@ -327,7 +327,7 @@ def parse_addition_expression(scanner):
 		else:
 			Node = SubtractExpression
 		right = parse_multiplication_expression(scanner)
-		left = Node(left, right)
+		left = Node(left=left, right=right)
 	return left
 
 def parse_multiplication_expression(scanner):
@@ -338,7 +338,7 @@ def parse_multiplication_expression(scanner):
 		else:
 			Node = DivideExpression
 		right = parse_parenthesized_expression(scanner)
-		left = Node(left, right)
+		left = Node(left=left, right=right)
 	return left
 
 def parse_parenthesized_expression(scanner):
@@ -360,19 +360,19 @@ def parse_id_expression(scanner):
 		if scanner.peek().type == T.OP_DOT:
 			scanner.next()
 			integer_literal = parse_token(scanner, T.INT_LIT)
-			return TupleAccessExpression(id_token, integer_literal)
+			return TupleAccessExpression(identifier_token=id_token, index=integer_literal)
 		elif scanner.peek().type == T.LBRAK:
 			scanner.next()
 			index_expression = parse_expression(scanner)
 			parse_token(scanner, T.RBRAK)
-			return ArrayAccessExpression(id_token, index_expression)
+			return ArrayAccessExpression(identifier_token=id_token, index=index_expression)
 		else:
 			try:
 				argument_expression = parse_parenthesized_expression(scanner)
-				return FunctionCallExpression(id_token, argument_expression)
+				return FunctionCallExpression(identifier_token=id_token, argument=argument_expression)
 			except ParseError:
-				return IdentifierExpression(id_token)
+				return IdentifierExpression(token=id_token)
 	elif scanner.peek().type == T.INT_LIT:
-		return IntegerLiteralExpression(scanner.next())
+		return IntegerLiteralExpression(token=scanner.next())
 	else:
 		raise ParseError(expected=set([T.ID, T.INT_LIT]))

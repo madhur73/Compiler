@@ -1,3 +1,14 @@
+"""Abstract syntax tree.
+
+ASTs are trees built from the following elements:
+- Objects descending from Node
+- Tokens (for leaf nodes)
+- Python lists
+- The value None (for optional elements)
+"""
+
+import copy
+
 from bmc.token import Token
 from typing import List, Union, Optional, get_type_hints
 
@@ -35,14 +46,39 @@ class Node:
         if type(self) != type(other):
             return NotImplemented
         return self.children() == other.children()
-        
+
 
 def _type_annotation_names(cls):
     annotations = dict()
     for c in reversed(cls.mro()):
         annotations.update(getattr(c, "__annotations__", {}))
     return annotations.keys()
- 
+
+def strip_locations(root_element):
+    """Return a copy of the given AST element, but with all location information set to None, recursively.
+    
+    Useful for equality comparisons when you don't care about the locations strictly
+    matching, such as in tests.
+    """
+    def recursively_strip_in_place(element):
+        if isinstance(element, list):
+            for list_element in element:
+                recursively_strip_in_place(list_element)
+        elif isinstance(element, Token):
+            element.begin = None
+            element.end = None
+            element.line = None
+            element.column = None
+        elif isinstance(element, Node):
+            element.location_begin = None
+            element.location_end = None
+            for child_name, child in element.children():
+                recursively_strip_in_place(child)
+    root_element_copy = copy.deepcopy(root_element)
+    recursively_strip_in_place(root_element_copy)
+    return root_element_copy
+
+        
 # Descendents of Node are given an auto-generated __init__().  The node's children
 # are passed in as keyword-only arguments; the names of these arguments are
 # specified by type annotations.  Additionally, the __init__() accepts optional
