@@ -224,12 +224,19 @@ def parse_if_statement(scanner):
 	parse_token_sequence(scanner, [T.KW_END, T.KW_IF])
 	return root_node
 
+# parse_any() fails for this, because of the hidden common prefix between ranges and array IDs.
+def parse_range_or_identifier(scanner):
+	first_expression = parse_expression(scanner)
+	if scanner.peek().type == T.OP_DOTDOT:
+		scanner.next()
+		second_expression = parse_expression(scanner)
+		return Range(begin_expression=first_expression, end_expression=second_expression)
+	else:
+		return first_expression
+	
 def parse_foreach_statement(scanner):
 	_, identifier, _ = parse_token_sequence(scanner, [T.KW_FOREACH, T.ID, T.KW_IN])
-	source_range_or_identifier = parse_any(scanner, [
-		parse_range,
-		lambda s: IdentifierExpression(parse_token(s, T.ID))
-	])
+	source_range_or_identifier = parse_range_or_identifier(scanner)
 	parse_token(scanner, T.KW_DO)
 	statements = parse_statement_list(scanner, T.KW_END)
 	parse_token_sequence(scanner, [T.KW_FOR])
