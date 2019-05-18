@@ -10,7 +10,26 @@ ASTs are trees built from the following elements:
 import copy
 
 from bmc.token import Token
+from bmc.scope import TupleType, ArrayType, Scope
 from typing import List, Union, Optional, get_type_hints
+from llvmlite import ir
+
+class SemanticError(Exception):
+    pass
+
+i32_t = ir.IntType(32)
+
+# Arrays are represented as a struct containing a start index, end index, and pointer to
+# the beginning of the array.
+array_t = ir.LiteralStructType([i32_t, i32_t, i32_t.as_pointer()])
+
+def add_string_constant(module, name, string):
+    byte_array = bytearray(string, encoding="utf-8")
+    constant_value = ir.ArrayType(ir.IntType(8), len(byte_array))(byte_array)
+    global_variable = ir.GlobalVariable(module, constant_value.type, name)
+    global_variable.global_constant = True
+    global_variable.initializer = constant_value
+    return global_variable
 
 class Node:
     """Base class for all abstract syntax tree nodes."""
@@ -86,7 +105,19 @@ def strip_locations(root_element):
 
 class Program(Node):
     parts: List[Union["Statement", "FunctionDefinition", "Declaration"]]
-
+    def compile(self):
+        # Compile the whole program as an LLVM module.
+        global_scope = Scope()
+        module = ir.Module()
+        add_string_constant(module, "printf_fmt", "%i\n\0")
+        ir.Function(module, ir.FunctionType(i32_t, [ir.IntType(8).as_pointer()], var_arg=True), "printf")
+        main_function = ir.Function(module, ir.FunctionType(i32_t, []), name="main")
+        block = main_function.append_basic_block()
+        builder = ir.IRBuilder(block)
+        for part in self.parts:
+            part.compile(global_scope, builder)
+        builder.ret(i32_t(0))
+        return module
 
 # Declarations:
 
@@ -109,6 +140,23 @@ class LocalDeclaration(Declaration):
 class GlobalDeclaration(Declaration):
     identifier: Token
     expression: Optional["Expression"]
+    def compile(self, scope, builder):
+        if self.expression:
+            rhs_type = self.expression.infer_type(scope)
+            if rhs_type == ArrayType:
+                raise SemanticError("Initializing from arrays is not allowed.", identifier)
+            slot = builder.alloca(ir.ArrayType(i32_t, rhs_type.length))
+            values = self.expression.compile_values(scope, builder)
+            for i, v in enumerate(values):
+                gep = builder.gep(slot, [i32_t(0), i32_t(i)])
+                builder.store(v, gep)
+            scope.add_global_declaration(self.identifier, rhs_type, slot)
+        else:
+            # Global variable declared without initialization.
+            # We know it will subsequently be initialized as an array, so we can
+            # allocate space for an array here.
+            slot = builder.alloca(array_t)
+            scope.add_global(identifier, slot)
 
 # Definitions:
 
@@ -162,7 +210,15 @@ class ReturnStatement(Statement):
 # print x
 class PrintStatement(Statement):
     expression: "Expression"
-
+    def compile(self, scope, builder):
+        if self.expression.infer_type(scope) != TupleType(1):
+            raise SemanticError("Only single integers can be printed.")
+        [value] = self.expression.compile_values(scope, builder)
+        value = builder.load(value)
+        printf = builder.module.get_global("printf")
+        fmt = builder.module.get_global("printf_fmt")
+        gep = builder.gep(fmt, [i32_t(0), i32_t(0)])
+        builder.call(printf, [gep, value])
 
 # Expressions:
 
@@ -182,17 +238,29 @@ class GreaterThanEqualsExpression(BooleanExpression): pass
 class EqualsExpression(BooleanExpression): pass
 class NotEqualsExpression(BooleanExpression): pass
 
+
+# Expressions.
+# All expressions implement a compile_values() method that returns a
+# list of IR objects representing the result of the expression, suitable for
+# assignment.  If the result is a single integer, or an array, it should still
+# be wrapped as a single-element list.
 class Expression(Node): # Abstract base class.
     pass
 
 # a, b, c
 class TupleExpression(Expression):
     elements: List["Expression"]
+    def infer_type(self, scope):
+        return TupleType(sum(e.infer_type(scope).length for e in self.elements))
+    def compile_values(self, scope, builder):
+        return sum((e.compile_values(scope, builder) for e in self.elements), [])
 
 # a+b, a-b, a*b, a/b
 class ArithmeticExpression(Expression):
     left: "Expression"
     right: "Expression"
+    def infer_type(self, scope):
+        return TupleType(1)
 class AddExpression(ArithmeticExpression): pass
 class SubtractExpression(ArithmeticExpression): pass
 class MultiplyExpression(ArithmeticExpression): pass
@@ -211,12 +279,27 @@ class FunctionCallExpression(Expression):
 class TupleAccessExpression(Expression):
     identifier_token: Token
     index: Token
+    def infer_type(self, scope):
+        return TupleType(1)
+    def compile_values(self, scope, builder):
+        type, slot = scope.lookup(self.identifier_token)
+        if not isinstance(type, TupleType):
+            raise SemanticError("Only tuples can be indexed.")
+        index = int(self.index.string) - 1
+        gep = builder.gep(slot, [i32_t(0), i32_t(index)])
+        return [gep]
 
 # a[i]
 class ArrayAccessExpression(Expression):
     identifier_token: Token
     index: "Expression"
+    def infer_type(self, scope):
+        return TupleType(1)
 
 # 123
 class IntegerLiteralExpression(Expression):
     token: Token
+    def infer_type(self, scope):
+        return TupleType(1)
+    def compile_values(self, scope, builder):
+        return [i32_t(int(self.token.string))]
