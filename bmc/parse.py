@@ -1,18 +1,25 @@
-
-from bmc.ast import *
-from bmc import scanner
-from bmc.token import TokenType as T
 from copy import copy
+import bmc.errors
+from bmc.token import TokenType as T
+from bmc.ast import *
 
-def parse_report_errors(scanner):
+def parse(scanner, error_logger):
+	"""Parse a whole program.
+	
+	Args:
+		scanner: a Scanner object.
+		error_logger: an ErrorLogger object to log syntax errors to.
+	Returns:
+		A Program AST node.  If any syntax errors were encountered, the node is empty (parts=[]).
+	"""
 	try:
-		ast = parse_program(scanner)
-		print("Success!")
-		return ast
+		return parse_program(scanner)
 	except ParseError as error:
-		print("Error.")
-		print("Got", scanner.peek())
-		print("But expected " + " or ".join(str(t) for t in error.expected))
+		got = scanner.peek()
+		expected = " or ".join(str(t) for t in error.expected)
+		message = "Got {got} but expected {expected}."
+		error_logger.log(bmc.errors.ReportableError(message, got))
+		return Program(parts=[])
 	
 class ParseError(Exception):
 	"""Exception for parse errors.
