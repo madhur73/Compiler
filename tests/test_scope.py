@@ -33,3 +33,11 @@ def test_undeclared_error():
     with pytest.raises(scope.ScopeError):
         s.lookup(new_token("x"))
     
+def test_redeclared_error():
+    s = scope.Scope()
+    s.add_global_declaration(new_token("x"), scope.TupleType(1), None)
+    with pytest.raises(scope.ScopeError):
+        s.add_global_declaration(new_token("x"), scope.TupleType(1), None) # Same type and slot.
+    with pytest.raises(scope.ScopeError):
+        s.add_global_declaration(new_token("x"), scope.TupleType(2), None) # Different type and slot.  Still an error.
+    
