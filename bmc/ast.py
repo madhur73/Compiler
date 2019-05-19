@@ -214,7 +214,6 @@ class PrintStatement(Statement):
         if self.expression.infer_type(scope) != TupleType(1):
             raise SemanticError("Only single integers can be printed.")
         [value] = self.expression.compile_values(scope, builder)
-        value = builder.load(value)
         printf = builder.module.get_global("printf")
         fmt = builder.module.get_global("printf_fmt")
         gep = builder.gep(fmt, [i32_t(0), i32_t(0)])
@@ -286,7 +285,7 @@ class TupleAccessExpression(Expression):
         if not isinstance(type, TupleType):
             raise SemanticError("Only tuples can be indexed.")
         index = int(self.index.string) - 1
-        gep = builder.gep(slot, [i32_t(0), i32_t(index)])
+        gep = builder.load(builder.gep(slot, [i32_t(0), i32_t(index)]))
         return [gep]
 
 # a[i]
