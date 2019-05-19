@@ -175,11 +175,22 @@ class Statement(Node): # Abstract base class.
 # a, t.1, a[1]
 class LHS(Node):
     elements: List[Union["IdentifierExpression", "TupleAccessExpression", "ArrayAccessExpression"]]
+    def infer_type(self, scope):
+        return TupleType(sum(e.infer_type(scope).length for e in self.elements))
+    def compile_slots(self, scope, builder):
+        return sum([e.compile_slots(scope, builder) for e in self.elements], [])
 
 # a = b
 class AssignmentStatement(Statement):
     left: "LHS"
     right: "Expression"
+    def compile(self, scope, builder):
+        left_type = self.left.infer_type(scope)
+        right_type = self.right.infer_type(scope)
+        if left_type != right_type:
+            raise SemanticError("LHS of assignment ({left_type}) does not match RHS ({right_type}).")
+        for slot, value in zip(self.left.compile_slots(scope, builder), self.right.compile_values(scope, builder)):
+            builder.store(value, slot)
 
 # a <-> b
 class ExchangeStatement(Statement):
@@ -268,6 +279,16 @@ class DivideExpression(ArithmeticExpression): pass
 # a
 class IdentifierExpression(Expression):
     token: Token
+    def infer_type(self, scope):
+        type, slot = scope.lookup(self.token)
+        return type
+    def compile_values(self, scope, builder):
+        slots = self.compile_slots(scope, builder)
+        return [builder.load(slot) for slot in slots]
+    def compile_slots(self, scope, builder):
+        type, array_slot = scope.lookup(self.token)
+        slots = [builder.gep(array_slot, [i32_t(0), i32_t(i)]) for i in range(type.length)]
+        return slots
 
 # f x
 class FunctionCallExpression(Expression):
@@ -281,12 +302,17 @@ class TupleAccessExpression(Expression):
     def infer_type(self, scope):
         return TupleType(1)
     def compile_values(self, scope, builder):
+        [slot] = self.compile_slots(scope, builder)
+        return [builder.load(slot)]
+    def compile_slots(self, scope, builder):
         type, slot = scope.lookup(self.identifier_token)
         if not isinstance(type, TupleType):
             raise SemanticError("Only tuples can be indexed.")
-        index = int(self.index.string) - 1
-        gep = builder.load(builder.gep(slot, [i32_t(0), i32_t(index)]))
-        return [gep]
+        index = int(self.index.string)
+        if not 1 <= index <= type.length:
+            raise SemanticError("Tuple index out of bounds.  Must be from 1 to " + type.length + ".")
+        index -= 1
+        return [builder.gep(slot, [i32_t(0), i32_t(index)])]
 
 # a[i]
 class ArrayAccessExpression(Expression):
