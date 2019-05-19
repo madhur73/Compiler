@@ -27,3 +27,9 @@ def test_shadowing():
     inner.add_global_declaration(new_token("x"), scope.TupleType(2), None)
     assert outer.lookup(new_token("x")) == (scope.TupleType(1), None)
     assert inner.lookup(new_token("x")) == (scope.TupleType(2), None)
+
+def test_undeclared_error():
+    s = scope.Scope()
+    with pytest.raises(scope.ScopeError):
+        s.lookup(new_token("x"))
+    
