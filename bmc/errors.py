@@ -31,7 +31,7 @@ class ErrorLogger:
     def __init__(self):
         self.errors = []
     def log(self, reportable_error):
-        self.errors.add(reportable_error)
+        self.errors.append(reportable_error)
     def count(self):
         return len(self.errors)
     def print_all(self):

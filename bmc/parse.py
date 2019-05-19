@@ -17,7 +17,7 @@ def parse(scanner, error_logger):
 	except ParseError as error:
 		got = scanner.peek()
 		expected = " or ".join(str(t) for t in error.expected)
-		message = "Got {got} but expected {expected}."
+		message = f"Got {got} but expected {expected}."
 		error_logger.log(bmc.errors.ReportableError(message, got))
 		return Program(parts=[])
 	
