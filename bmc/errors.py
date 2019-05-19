@@ -6,7 +6,7 @@ class ReportableError(Exception):
     unit tests more precise.
     """
     
-    def __init__(message, token=None):
+    def __init__(self, message, token=None):
         """Initialize the exception.
         
         Args:
