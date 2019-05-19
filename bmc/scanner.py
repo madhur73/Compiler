@@ -2,6 +2,10 @@ import re
 import string
     
 from bmc.token import *
+from bmc import errors
+
+class ScannerError(errors.ReportableError):
+    pass
 
 # Each token type corresponds to a regular expression pattern.  Each pattern is
 # wrapped as a group, and those groups are concatenated into one big mega-regex.
@@ -76,7 +80,7 @@ def _next_token(source, begin):
         return None, ""
 
 class Scanner:
-    def __init__(self, *, string="", filepath=None, file=None, emit_comments=False):
+    def __init__(self, *, string="", filepath=None, file=None, emit_comments=False, error_logger=None):
         """Initializes a Scanner.
         
         The full source must be provided as either a single string, a file, or a path to a file.
@@ -85,6 +89,8 @@ class Scanner:
         Comment tokens will be included in the output stream only if emit_comments is true.
         
         Non-ASCII is accepted in comments, but rejected everywhere else.
+        
+        error_logger is an optional ErrorLogger object.  If it is not specified, errors are ignored.
         """
         
         if filepath:
@@ -105,8 +111,9 @@ class Scanner:
         self._column = 1
     
     # Print a warning with a position tag from the current position with a length of error_length.
-    def _warn(self, message, error_length):
-        print("{}:{}-{}:{} Warning: {}".format(self._line, self._column, self._line, self._column+error_length, message))
+    def _warn(self, message, token):
+        if self.error_logger:
+            self.error_logger.log(ScannerError(message, token))
     
     def _advance_b(self, amount):
         self._b += amount
@@ -133,20 +140,26 @@ class Scanner:
             token_type, raw_value = _next_token(self._s, self._b)
             
             if token_type is None:
-                self._warn('unrecognized character "{}".'.format(self._s[self._b]), 1)
+                dummy_token = Token(None, raw_value, self._b, self._b+len(raw_value), self._line, self._column)
+                self._warn('unrecognized character "{}".'.format(self._s[self._b]), dummy_token)
                 self._advance_b(1)
                 continue
             
-            value = raw_value
+            error_message = None
             if token_type == TokenType.ID and len(raw_value) > 80:
-                self._warn('identifier "{}" will be truncated to 80 characters.'.format(raw_value), len(raw_value))
+                error_message = 'identifier "{}" will be truncated to 80 characters.'.format(raw_value)
                 value = raw_value[:80]
             elif token_type == TokenType.INT_LIT and int(raw_value) >= 2**31:
-                self._warn('integer "{}" will be clamped to 2^31-1.'.format(raw_value), len(raw_value))
+                error_message = 'integer "{}" will be clamped to 2^31-1.'.format(raw_value)
                 value = str(2**31 - 1)
+            else:
+                value = raw_value
             
             token = Token(token_type, value, self._b, self._b+len(raw_value), self._line, self._column)
             self._advance_b(len(raw_value))
+            
+            if error_message:
+                self._warn(ScannerError(message, token))
             
             if token_type == TokenType.COMMENT and not self._emit_comments:
                 continue
