@@ -85,7 +85,7 @@ class Scope:
             token, type, slot = self.namespace[token.string]
             return type, slot
         except KeyError:
-            return ScopeError(f"Variable {token.string} is undeclared.", token)
+            raise ScopeError(f"Variable {token.string} is undeclared.", token)
     
     def global_lookup(self, token):
         pass
