@@ -116,11 +116,7 @@ class Program(Node):
         block = main_function.append_basic_block()
         builder = ir.IRBuilder(block)
         
-        for part in self.parts:
-            try:
-                part.compile(global_scope, builder)
-            except SemanticError as e:
-                error_logger.log(e)
+        _compile_logging_errors(self.parts, global_scope, builder, error_logger)
         
         builder.ret(i32_t(0))
         return module
@@ -146,7 +142,7 @@ class LocalDeclaration(Declaration):
 class GlobalDeclaration(Declaration):
     identifier: Token
     expression: Optional["Expression"]
-    def compile(self, scope, builder):
+    def compile(self, scope, builder, logger):
         if self.expression:
             rhs_type = self.expression.infer_type(scope)
             if rhs_type == ArrayType:
@@ -192,7 +188,7 @@ class LHS(Node):
 class AssignmentStatement(Statement):
     left: "LHS"
     right: "Expression"
-    def compile(self, scope, builder):
+    def compile(self, scope, builder, logger):
         left_type = self.left.infer_type(scope)
         right_type = self.right.infer_type(scope)
         if left_type != right_type:
@@ -208,7 +204,7 @@ class AssignmentStatement(Statement):
 class ExchangeStatement(Statement):
     left: "LHS"
     right: "LHS"
-    def compile(self, scope, builder):
+    def compile(self, scope, builder, logger):
         left_type, right_type = (s.infer_type(scope) for s in (self.left, self.right))
         if left_type != right_type:
             raise SemanticError(f"LHS of exchange ({left_type}) does not match RHS ({right_type}).")
@@ -223,7 +219,7 @@ class ExchangeStatement(Statement):
 class WhileStatement(Statement):
     condition: "BooleanExpression"
     body: List["Statement"]
-    def compile(self, scope, builder):
+    def compile(self, scope, builder, logger):
         loop_check = builder.append_basic_block("while_loop_check")
         loop_body = builder.append_basic_block("while_loop_body")
         continuation = builder.append_basic_block()
@@ -236,8 +232,7 @@ class WhileStatement(Statement):
             builder.cbranch(predicate, truebr=loop_body, falsebr=continuation)
         
         with builder.goto_block(loop_body):
-            for statement in self.body:
-                statement.compile(scope, builder)
+            _compile_logging_errors(self.body, scope, builder, logger)
             builder.branch(loop_check)
 
 # if a == b then ... end if
@@ -259,7 +254,7 @@ class ReturnStatement(Statement):
 # print x
 class PrintStatement(Statement):
     expression: "Expression"
-    def compile(self, scope, builder):
+    def compile(self, scope, builder, logger):
         if self.expression.infer_type(scope) != TupleType(1):
             raise SemanticError("Only single integers can be printed.")
         [value] = self.expression.compile_values(scope, builder)
@@ -394,6 +389,13 @@ class IntegerLiteralExpression(Expression):
 
 class SemanticError(ReportableError):
     pass
+
+def _compile_logging_errors(compilables, scope, builder, logger):
+    for c in compilables:
+        try:
+            c.compile(scope, builder, logger)
+        except SemanticError as e:
+            logger.log(e)
 
 # LLVM types.  Tuples are represented as LLVM arrays of i32_t.
 # Arrays are represented as structs containing a start index, end index, and
