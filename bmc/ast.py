@@ -240,6 +240,12 @@ class IfStatement(Statement):
     condition: "BooleanExpression"
     body: List["Statement"]
     else_body: List["Statement"]
+    def compile(self, scope, builder, logger):
+        with builder.if_else(self.condition.compile_predicate(scope, builder)) as (then, otherwise):
+            with then:
+                _compile_logging_errors(self.body, scope, builder, logger)
+            with otherwise:
+                _compile_logging_errors(self.else_body, scope, builder, logger)
 
 # foreach i in s do ... end for
 class ForeachStatement(Statement):
