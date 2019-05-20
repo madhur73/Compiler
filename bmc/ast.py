@@ -11,6 +11,7 @@ for type checking and code generation.
 """
 
 import copy
+import itertools
 from typing import List, Union, Optional, get_type_hints
 from llvmlite import ir
 
@@ -184,6 +185,8 @@ class LHS(Node):
         return TupleType(sum(e.infer_type(scope).length for e in self.elements))
     def compile_slots(self, scope, builder):
         return sum([e.compile_slots(scope, builder) for e in self.elements], [])
+    def compile_values(self, scope, builder):
+        return sum((e.compile_values(scope, builder) for e in self.elements), [])
 
 # a = b
 class AssignmentStatement(Statement):
@@ -195,12 +198,26 @@ class AssignmentStatement(Statement):
         if left_type != right_type:
             raise SemanticError(f"LHS of assignment ({left_type}) does not match RHS ({right_type}).")
         for slot, value in zip(self.left.compile_slots(scope, builder), self.right.compile_values(scope, builder)):
+            # Note that even though we emit stores sequentially, all the slots are
+            # compiled at once, and all the values are compiled at once.  This
+            # prevents x.0, x.1 = 999, x.0 from incorrectly assigning 999 to x.1
+            # through the x.0 assignment that comes before it.
             builder.store(value, slot)
 
 # a <-> b
 class ExchangeStatement(Statement):
     left: "LHS"
     right: "LHS"
+    def compile(self, scope, builder):
+        left_type, right_type = (s.infer_type(scope) for s in (self.left, self.right))
+        if left_type != right_type:
+            raise SemanticError(f"LHS of exchange ({left_type}) does not match RHS ({right_type}).")
+        # See the note in AssignmentStatement.compile() about being careful here
+        # to not store anything before everything is loaded.
+        left_values, right_values = (s.compile_values(scope, builder) for s in (self.left, self.right))
+        left_slots, right_slots = (s.compile_slots(scope, builder) for s in (self.left, self.right))
+        for value, slot in itertools.chain(zip(left_values, right_slots), zip(right_values, left_slots)):
+            builder.store(value, slot)
 
 # while a == b do ... end while
 class WhileStatement(Statement):
