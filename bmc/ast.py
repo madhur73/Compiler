@@ -271,10 +271,20 @@ class ArithmeticExpression(Expression):
     right: "Expression"
     def infer_type(self, scope):
         return TupleType(1)
-class AddExpression(ArithmeticExpression): pass
-class SubtractExpression(ArithmeticExpression): pass
-class MultiplyExpression(ArithmeticExpression): pass
-class DivideExpression(ArithmeticExpression): pass
+    def compile_values(self, scope, builder):
+        if not (self.left.infer_type(scope), self.right.infer_type(scope)) == (TupleType(1), TupleType(1)):
+            raise SemanticError("Arithmetic can only be performed on single integers.")
+        [l_value], [r_value] = (e.compile_values(scope, builder) for e in (self.left, self.right))
+        result = getattr(builder, self.instruction_name)(l_value, r_value)
+        return [result]
+class AddExpression(ArithmeticExpression):
+    instruction_name = "add"
+class SubtractExpression(ArithmeticExpression):
+    instruction_name = "sub"
+class MultiplyExpression(ArithmeticExpression):
+    instruction_name = "mul"
+class DivideExpression(ArithmeticExpression):
+    instruction_name = "sdiv"
 
 # a
 class IdentifierExpression(Expression):
