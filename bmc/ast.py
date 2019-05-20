@@ -5,34 +5,27 @@ ASTs are trees built from the following elements:
 - Tokens (for leaf nodes)
 - Python lists
 - The value None (for optional elements)
+
+In addition to the AST structure itself, this module also contains the code
+for type checking and code generation.
 """
 
 import copy
-
-from bmc.token import Token
-from bmc.scope import TupleType, ArrayType, Scope
 from typing import List, Union, Optional, get_type_hints
 from llvmlite import ir
 
-class SemanticError(Exception):
-    pass
-
-i32_t = ir.IntType(32)
-
-# Arrays are represented as a struct containing a start index, end index, and pointer to
-# the beginning of the array.
-array_t = ir.LiteralStructType([i32_t, i32_t, i32_t.as_pointer()])
-
-def add_string_constant(module, name, string):
-    byte_array = bytearray(string, encoding="utf-8")
-    constant_value = ir.ArrayType(ir.IntType(8), len(byte_array))(byte_array)
-    global_variable = ir.GlobalVariable(module, constant_value.type, name)
-    global_variable.global_constant = True
-    global_variable.initializer = constant_value
-    return global_variable
+from bmc.errors import ReportableError
+from bmc.scope import TupleType, ArrayType, Scope
+from bmc.token import Token
 
 class Node:
-    """Base class for all abstract syntax tree nodes."""
+    """Base class for all abstract syntax tree nodes.
+    
+    Subclassing Node involves some important magic.  For conciseness, descendents
+    of Node are given an auto-generated __init__().  That init accepts keyword-only
+    arguments to initialize the node's children.  The names of the children are
+    determined by looking at the subclass's type annotations.
+    """
     
     def __repr__(self):
         def indent(string):
@@ -66,7 +59,15 @@ class Node:
 
 
 def _type_annotation_names(cls):
-    annotations = dict()
+    """Helper for getting the type annotation names belonging to a class, including those from the class's parents.
+    
+    We can't just use the helper functions from the typing module, because this
+    function is called at class creation time - before forward declarations in
+    type annotations have a real class to match - causing the functions in the
+    typing module to error out.  Anyway, we don't need to resolve the actual
+    type of the attribute; we only care about the name.
+    """
+    annotations = {}
     for c in reversed(cls.mro()):
         annotations.update(getattr(c, "__annotations__", {}))
     return annotations.keys()
@@ -76,6 +77,9 @@ def strip_locations(root_element):
     
     Useful for equality comparisons when you don't care about the locations strictly
     matching, such as in tests.
+    
+    This is a free function instead of a member function so that it can work on
+    lists and None values.
     """
     def recursively_strip_in_place(element):
         if isinstance(element, list):
@@ -89,33 +93,34 @@ def strip_locations(root_element):
         elif isinstance(element, Node):
             for child_name, child in element.children():
                 recursively_strip_in_place(child)
+    # We copy the whole AST and strip each element in place because
+    # we have no easy generic way of constructing a copy of an AST node given
+    # the children that we want it to have.
     root_element_copy = copy.deepcopy(root_element)
     recursively_strip_in_place(root_element_copy)
     return root_element_copy
-
-        
-# Descendents of Node are given an auto-generated __init__().  The node's children
-# are passed in as keyword-only arguments; the names of these arguments are
-# specified by type annotations.  Additionally, the __init__() accepts optional
-# location_begin and location_end arguments, representing the [begin, end) source
-# file offsets of the node.
 
 
 # Root node:
 
 class Program(Node):
     parts: List[Union["Statement", "FunctionDefinition", "Declaration"]]
-    def compile(self):
-        # Compile the whole program as an LLVM module.
+    def compile(self, error_logger):
+        """Compile the whole program as an LLVM module."""
         global_scope = Scope()
         module = ir.Module()
-        add_string_constant(module, "printf_fmt", "%i\n\0")
+        _add_string_constant(module, "printf_fmt", "%i\n\0")
         ir.Function(module, ir.FunctionType(i32_t, [ir.IntType(8).as_pointer()], var_arg=True), "printf")
         main_function = ir.Function(module, ir.FunctionType(i32_t, []), name="main")
         block = main_function.append_basic_block()
         builder = ir.IRBuilder(block)
+        
         for part in self.parts:
-            part.compile(global_scope, builder)
+            try:
+                part.compile(global_scope, builder)
+            except SemanticError as e:
+                error_logger.log(e)
+        
         builder.ret(i32_t(0))
         return module
 
@@ -188,7 +193,7 @@ class AssignmentStatement(Statement):
         left_type = self.left.infer_type(scope)
         right_type = self.right.infer_type(scope)
         if left_type != right_type:
-            raise SemanticError("LHS of assignment ({left_type}) does not match RHS ({right_type}).")
+            raise SemanticError(f"LHS of assignment ({left_type}) does not match RHS ({right_type}).")
         for slot, value in zip(self.left.compile_slots(scope, builder), self.right.compile_values(scope, builder)):
             builder.store(value, slot)
 
@@ -320,7 +325,7 @@ class TupleAccessExpression(Expression):
             raise SemanticError("Only tuples can be indexed.")
         index = int(self.index.string)
         if not 1 <= index <= type.length:
-            raise SemanticError("Tuple index out of bounds.  Must be from 1 to " + type.length + ".")
+            raise SemanticError("Tuple index out of bounds.  Must be from 1 to " + str(type.length) + ".")
         index -= 1
         return [builder.gep(slot, [i32_t(0), i32_t(index)])]
 
@@ -338,3 +343,24 @@ class IntegerLiteralExpression(Expression):
         return TupleType(1)
     def compile_values(self, scope, builder):
         return [i32_t(int(self.token.string))]
+
+
+# Code generation stuff.
+
+class SemanticError(ReportableError):
+    pass
+
+# LLVM types.  Tuples are represented as LLVM arrays of i32_t.
+# Arrays are represented as structs containing a start index, end index, and
+# pointer to the beginning of the array.
+i32_t = ir.IntType(32)
+array_t = ir.LiteralStructType([i32_t, i32_t, i32_t.as_pointer()])
+
+# Helper function for adding a char* global constant to an LLVM module.
+def _add_string_constant(module, name, string):
+    byte_array = bytearray(string, encoding="utf-8")
+    constant_value = ir.ArrayType(ir.IntType(8), len(byte_array))(byte_array)
+    global_variable = ir.GlobalVariable(module, constant_value.type, name)
+    global_variable.global_constant = True
+    global_variable.initializer = constant_value
+    return global_variable
