@@ -206,6 +206,22 @@ class ExchangeStatement(Statement):
 class WhileStatement(Statement):
     condition: "BooleanExpression"
     body: List["Statement"]
+    def compile(self, scope, builder):
+        loop_check = builder.append_basic_block("while_loop_check")
+        loop_body = builder.append_basic_block("while_loop_body")
+        continuation = builder.append_basic_block()
+        
+        builder.branch(loop_check)
+        builder.position_at_end(continuation)
+        
+        with builder.goto_block(loop_check):
+            predicate = self.condition.compile_predicate(scope, builder)
+            builder.cbranch(predicate, truebr=loop_body, falsebr=continuation)
+        
+        with builder.goto_block(loop_body):
+            for statement in self.body:
+                statement.compile(scope, builder)
+            builder.branch(loop_check)
 
 # if a == b then ... end if
 class IfStatement(Statement):
@@ -246,12 +262,24 @@ class Range(Node):
 class BooleanExpression(Node):
     left: "Expression"
     right: "Expression"
-class LessThanExpression(BooleanExpression): pass
-class LessThanEqualsExpression(BooleanExpression): pass
-class GreaterThanExpression(BooleanExpression): pass
-class GreaterThanEqualsExpression(BooleanExpression): pass
-class EqualsExpression(BooleanExpression): pass
-class NotEqualsExpression(BooleanExpression): pass
+    def compile_predicate(self, scope, builder):
+        """Returns an LLVM i1 value representing the result of the comparison."""
+        if not (self.left.infer_type(scope), self.right.infer_type(scope)) == (TupleType(1), TupleType(1)):
+            raise SemanticError("Comparisons can only be made between single integers.")
+        [l_value], [r_value] = (e.compile_values(scope, builder) for e in (self.left, self.right))
+        return builder.icmp_signed(self.cmpop, l_value, r_value)
+class LessThanExpression(BooleanExpression):
+    cmpop = "<"
+class LessThanEqualsExpression(BooleanExpression):
+    cmpop = "<="
+class GreaterThanExpression(BooleanExpression):
+    cmpop = ">"
+class GreaterThanEqualsExpression(BooleanExpression):
+    cmpop = ">="
+class EqualsExpression(BooleanExpression):
+    cmpop = "=="
+class NotEqualsExpression(BooleanExpression):
+    cmpop = "!="
 
 
 # Expressions.
