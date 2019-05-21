@@ -26,6 +26,34 @@ class Node:
     of Node are given an auto-generated __init__().  That init accepts keyword-only
     arguments to initialize the node's children.  The names of the children are
     determined by looking at the subclass's type annotations.
+    
+    For code generation, AST nodes provide one or more of the following methods,
+    depending on what kind of node they are.
+    
+    compile()
+        Only the root node provides this.  Compiles the whole program and returns
+        the LLVM module.
+    
+    compile(scope, builder, error_logger)
+        Provided by "state-modifying" things like declarations and assignments.
+        No return value.
+    
+    compile_values(scope, builder)
+        Provided by things that can be assigned from.  Returns a list
+        of LLVM values representing the integer values from the flattened,
+        expanded tuple.
+    
+    compile_slots(scope, builder)
+        Provided by things that can be assigned to.  Returns a list of LLVM
+        pointer-to-i32 values representing the local stack slots where new
+        values can be stored.
+    
+    infer_type(scope)
+        Provided by the same things that provide compile_values().  Returns a
+        type from bmc.scope.
+    
+    In general, any of these can raise a SemanticError.  These can be caught,
+    logged, and recovered from in the nodes that provide a compile() method.
     """
     
     def __repr__(self):
