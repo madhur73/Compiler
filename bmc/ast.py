@@ -138,7 +138,7 @@ class Program(Node):
         """Compile the whole program as an LLVM module."""
         global_scope = Scope()
         module = ir.Module()
-        _add_string_constant(module, "printf_fmt", "%i\n\0")
+        
         ir.Function(module, ir.FunctionType(i32_t, [ir.IntType(8).as_pointer()], var_arg=True), "printf")
         main_function = ir.Function(module, ir.FunctionType(i32_t, []), name="main")
         block = main_function.append_basic_block()
@@ -289,13 +289,14 @@ class ReturnStatement(Statement):
 class PrintStatement(Statement):
     expression: "Expression"
     def compile(self, scope, builder, logger):
-        if self.expression.infer_type(scope) != TupleType(1):
-            raise SemanticError("Only single integers can be printed.")
-        [value] = self.expression.compile_values(scope, builder)
+        if not isinstance(self.expression.infer_type(scope), TupleType):
+            raise SemanticError("Only tuples can be printed.")
+        values = self.expression.compile_values(scope, builder)
+        format_string = ",".join("%i" for v in values) + "\n\0"
+        format_string_constant = _add_string_constant(builder.module, format_string)
+        format_string_gep = builder.gep(format_string_constant, [i32_t(0), i32_t(0)])
         printf = builder.module.get_global("printf")
-        fmt = builder.module.get_global("printf_fmt")
-        gep = builder.gep(fmt, [i32_t(0), i32_t(0)])
-        builder.call(printf, [gep, value])
+        builder.call(printf, [format_string_gep] + [v for v in values])
 
 # Expressions:
 
@@ -438,10 +439,10 @@ i32_t = ir.IntType(32)
 array_t = ir.LiteralStructType([i32_t, i32_t, i32_t.as_pointer()])
 
 # Helper function for adding a char* global constant to an LLVM module.
-def _add_string_constant(module, name, string):
+def _add_string_constant(module, string):
     byte_array = bytearray(string, encoding="utf-8")
     constant_value = ir.ArrayType(ir.IntType(8), len(byte_array))(byte_array)
-    global_variable = ir.GlobalVariable(module, constant_value.type, name)
+    global_variable = ir.GlobalVariable(module, constant_value.type, module.get_unique_name())
     global_variable.global_constant = True
     global_variable.initializer = constant_value
     return global_variable
