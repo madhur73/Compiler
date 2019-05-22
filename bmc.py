@@ -26,7 +26,8 @@ if not args.output_tokens:
 if logger.count():
     logger.print_all()
 elif args.output_tokens:
-    print(token for token in scanner)
+    for token in scanner:
+        print(token)
 elif args.output_ast:
     print(ast)
 else: # --output-llvm
