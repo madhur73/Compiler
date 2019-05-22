@@ -222,11 +222,11 @@ def parse_if_statement(scanner):
 		parse_token(scanner, T.KW_THEN)
 		elsif_statements = parse_statement_list(scanner, None)
 		new_node = IfStatement(condition=elsif_condition, body=elsif_statements, else_body=[])
-		rightmost_node.else_statements = [new_node]
+		rightmost_node.else_body = [new_node]
 		rightmost_node = new_node
 	if scanner.peek().type == T.KW_ELSE:
 		scanner.next()
-		rightmost_node.else_statements = parse_statement_list(scanner, None)
+		rightmost_node.else_body = parse_statement_list(scanner, None)
 	
 	parse_token_sequence(scanner, [T.KW_END, T.KW_IF])
 	return root_node
