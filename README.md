@@ -10,4 +10,4 @@ BMC uses [pytest](https://docs.pytest.org/en/latest/) to run unit tests.  To ins
 
 Then, to run the tests, from the root directory:
 
-    pytest
+    pytest-3
