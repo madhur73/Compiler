@@ -21,7 +21,7 @@ scanner = bmc.scanner.Scanner(file=args.input_file, error_logger=logger)
 if not args.output_tokens:
     ast = bmc.parse.parse(scanner, logger)
     if not args.output_ast:
-        llvm = ast.compile(logger) # To do: Incorporate error logger.
+        llvm = ast.compile(logger)
 
 if logger.count():
     logger.print_all()
