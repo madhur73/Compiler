@@ -1,26 +1,19 @@
-
-
 We're using Python. Everything up to the code generation is hand-written. Code generation uses llvmlite to output formatted and validated LLVM IR.
-Following are DONE-
 
-    1.The scanner
-    2.The parser
-    3.Code generation and semantic analysis are limited to:
-        a.Printing.
-        b.Global declarations of tuples.
-        c.Assignment statements.
+The following are done:
 
-    4.Error recovery doesn't work. The compiler stops on the first error.
-    5.In the global scope:
-	    a.The complete set of tuple operations - declarations, assignments, exchanges(not confused with any)
-	    b.Arithmetic
-	    c.If-statements (including elsif, nesting, etc.)
-	    d.While-loops
-	    e.Statement-level semantic error recovery - if one statement is semantically invalid, we still check the ones that come after it
+* The scanner, and token output
+* The parser, and AST output, with the limitation that it can only handle one error at a time
 
-Following are NOT DONE(Incomplete) only Scanning and Pasrsing works:.
+The code generation and semantic analysis stage is incomplete:
 
-   1. arrays
-   2. functions.
-
-     
+* Print statements for integers and tuples are supported.
+* Tuple assignments and exchanges (from integers, or other tuples, or some combination) is supported.
+* Arithmetic is supported.
+* If-statements and conditionals are supported, including elsif, nesting, etc.
+* While-loops are supported.
+* Foreach-loops are entirely unsupported.
+* Arrays are entirely unsupported.  There is some code for setting up the stack space for array declarations, but not enough to be functional.  What is missing is the semantic analysis part, i.e., knowing that `global a; array a[1..2];` means that `a` is an array and not a tuple when it is referred to in subsequent expressions.
+* Functions (and therefore local declarations and return statements) are entirely unsupported.
+* Both code generation and semantic analysis (making sure variables are not used before they are declared, etc.) works for what is supported, as described above.
+* Except for syntax errors, we try to recover from errors in the input source code.  All errors are printed in lexical order with a helpful message.  Certain errors are printed without location information.
