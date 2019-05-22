@@ -160,6 +160,17 @@ class ArrayDeclaration(Declaration):
     range: "Range"
     index_identifier: Optional[Token]
     index_expression: Optional["Expression"]
+    def compile(self, scope, builder, logger):
+        begin_type = self.range.begin_expression.infer_type(scope)
+        end_type = self.range.end_expression.infer_type(scope)
+        if begin_type != TupleType(1) or end_type != TupleType(1):
+            raise SemanticError("Indices in array declaration must be single integers.")
+        [begin] = self.range.begin_expression.compile_values(scope, builder)
+        [end] = self.range.end_expression.compile_values(scope, builder)
+        length = builder.add(builder.sub(end, begin), i32_t(1))
+        data_slot = builder.alloca(i32_t, length)
+        structure_slot = builder.alloca(array_t)
+        builder.store(array_t([begin, end, data_slot]), structure_slot)
 
 # local x = 1
 class LocalDeclaration(Declaration):
@@ -182,11 +193,9 @@ class GlobalDeclaration(Declaration):
                 builder.store(v, gep)
             scope.add_global_declaration(self.identifier, rhs_type, slot)
         else:
-            # Global variable declared without initialization.
-            # We know it will subsequently be initialized as an array, so we can
-            # allocate space for an array here.
-            slot = builder.alloca(array_t)
-            scope.add_global(identifier, slot)
+            # Global variable declared without initialization.  It must be
+            # an array; it will be initialized in a subsequent ArrayDeclaration.
+            pass
 
 # Definitions:
 
