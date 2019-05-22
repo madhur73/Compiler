@@ -101,6 +101,7 @@ class Scanner:
         
         self._s = string
         self._emit_comments = emit_comments
+        self.error_logger = error_logger
         
         # File offset to beginning of next token.
         self._b = 0
