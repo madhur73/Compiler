@@ -17,3 +17,5 @@ The code generation and semantic analysis stage is incomplete:
 * Functions (and therefore local declarations and return statements) are entirely unsupported.
 * Both code generation and semantic analysis (making sure variables are not used before they are declared, etc.) works for what is supported, as described above.
 * Except for syntax errors, we try to recover from errors in the input source code.  All errors are printed in lexical order with a helpful message.  Certain errors are printed without location information.
+
+See `example.boris` for a fully supported sample program.
