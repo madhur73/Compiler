@@ -1,3 +1,7 @@
+# BMC
+
+Biyani-Marrone Compiler, by Madhur Biyani and Max Marrone.
+
 # Project Status
 
 See DESCRIPTION.md.
