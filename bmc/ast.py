@@ -171,11 +171,16 @@ class ArrayDeclaration(Declaration):
         data_slot = builder.alloca(i32_t, length)
         structure_slot = builder.alloca(array_t)
         builder.store(array_t([begin, end, data_slot]), structure_slot)
+        
+        # TODO: Add new array variable to scope.
+        raise SemanticError("Arrays are not supported.", self.identifier)
 
 # local x = 1
 class LocalDeclaration(Declaration):
     identifier: Token
     expression: Optional["Expression"]
+    def compile(self, scope, builder, logger):
+        raise SemanticError("Local declarations are not supported.", self.identifier)
 
 # global x = 1
 class GlobalDeclaration(Declaration):
@@ -204,6 +209,8 @@ class FunctionDefinition(Node):
     function_identifier: Token
     argument_identifiers: List[Token]
     body: List[Union["Declaration", "Statement"]]
+    def compile(self, scope, builder, logger):
+        raise SemanticError("Functions are not supported.", self.function_identifier)
 
 
 # Statements:
@@ -289,10 +296,14 @@ class ForeachStatement(Statement):
     element_identifier: Token
     source_sequence: Union["Expression", "Range"]
     body: List["Statement"]
+    def compile(self, scope, builder, logger):
+        raise SemanticError("Foreach loops are not supported.", self.element_identifier)
 
 # return x
 class ReturnStatement(Statement):
     expression: "Expression"
+    def compile(self, scope, builder, logger):
+        raise SemanticError("Return statements are not supported.")
 
 # print x
 class PrintStatement(Statement):
@@ -393,6 +404,10 @@ class IdentifierExpression(Expression):
 class FunctionCallExpression(Expression):
     identifier_token: Token
     argument: "Expression"
+    def compile_values(self, scope, builder):
+        raise SemanticError("Functions are not supported.", self.identifier_token)
+    def infer_type(self, scope):
+        raise SemanticError("Functions are not supported.", self.identifier_token)
 
 # t.1
 class TupleAccessExpression(Expression):
@@ -419,6 +434,10 @@ class ArrayAccessExpression(Expression):
     index: "Expression"
     def infer_type(self, scope):
         return TupleType(1)
+    def compile_values(self, scope, builder):
+        raise SemanticError("Arrays are not supported.", self.identifier_token)
+    def compile_slots(self, scope, builder):
+        raise SemanticError("Arrays are not supported.", self.identifier_token)
 
 # 123
 class IntegerLiteralExpression(Expression):
