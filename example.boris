@@ -1,0 +1,74 @@
+*** Print statements.
+print 1;
+print 10, 20, 30;
+
+***
+print 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1;
+
+*** Tuple assignments and expressions and such.
+global x = 1, 2, 3;
+global y = 4, 5, 6;
+global z = x, y;
+print z; *** 1,2,3,4,5,6
+
+z.1 = 100;
+z.6 = 600;
+z <-> x, y;
+print z; *** Again 1,2,3,4,5,6
+print x, y; *** 100,2,3,4,5,600
+x,y = y,x;
+print x,y; *** 4,5,600,100,2,3
+
+print 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1;
+
+*** Arithmetic.
+global arithmetic = 0;
+arithmetic = 10 * 10 * 10;
+print arithmetic; *** 1000
+print arithmetic / 3; *** 333
+print arithmetic - arithmetic - arithmetic; *** -1000
+
+print 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1;
+
+*** Loops.
+global output_tuple = 0,0,0,0,0,0,0,0;
+global overflow = 0;
+while overflow == 0 do
+	print output_tuple;
+	output_tuple, overflow = 1, output_tuple;
+end while
+
+print 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1;
+
+*** Find primes.
+global n = 1;
+global divisor = 0;
+while n < 100 do
+	divisor = 2;
+	while divisor < n do
+		if n - n/divisor*divisor == 0 then
+			divisor = n + 1;
+		else
+			divisor = divisor + 1; *** Break loop.
+		end if
+	end while
+	if divisor == n then print n; end if
+	n = n + 1;
+end while
+
+print 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1;
+
+*** Fizzbuzz.  (Nested if statements.)
+global fizzbuzz = 1;
+while fizzbuzz <= 100 do
+	if fizzbuzz-fizzbuzz/3*3 == 0 then
+		if fizzbuzz-fizzbuzz/5*5 == 0 then
+			print fizzbuzz,3,5;
+		else
+			print fizzbuzz,3;
+		end if
+	elsif fizzbuzz-fizzbuzz/5*5 == 0 then
+		print fizzbuzz,5;
+	end if
+	fizzbuzz = fizzbuzz + 1;
+end while
