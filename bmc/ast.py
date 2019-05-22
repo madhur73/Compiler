@@ -438,7 +438,7 @@ def _compile_logging_errors(compilables, scope, builder, logger):
     for c in compilables:
         try:
             c.compile(scope, builder, logger)
-        except SemanticError as e:
+        except ReportableError as e:
             logger.log(e)
 
 # LLVM types.  Tuples are represented as LLVM arrays of i32_t.
