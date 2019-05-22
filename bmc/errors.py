@@ -23,6 +23,18 @@ class ReportableError(Exception):
         else:
             prefix = "Error: "
         super().__init__(prefix + message)
+    
+    def __eq__(self, other):
+        if isinstance(other, ReportableError):
+            # Equivalent errors without tokens cannot compare equal, because they
+            # could have come from multiple places in the source code, and we want
+            # to show them both in that case.
+            return self.args == other.args and (self.token is not None and self.token == other.token)
+        else:
+            return NotImplemented
+    
+    def __hash__(self):
+        return hash((self.args, self.token))
 
 class ErrorLogger:
     """Deferred reporting of ReportableErrors.
@@ -34,9 +46,9 @@ class ErrorLogger:
     """
     
     def __init__(self):
-        self.errors = []
+        self.errors = set()
     def log(self, reportable_error):
-        self.errors.append(reportable_error)
+        self.errors.add(reportable_error)
     def count(self):
         return len(self.errors)
     def print_all(self):

@@ -75,3 +75,6 @@ class Token:
             == (other.type, other.string, other.begin, other.end, other.line, other.column)
         else:
             return NotImplemented
+    
+    def __hash__(self):
+        return hash((self.type, self.string, self.begin, self.end, self.line, self.column))
